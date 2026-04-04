@@ -6,21 +6,21 @@ use tracing::info;
 
 #[tokio::main]
 async fn main() {
-    // 1. Logging setup
+    // 1. 로깅 설정
     tracing_subscriber::fmt()
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    // 2. Load environment variables
-    // Note for team: Ensure you have copied .env.example to .env and filled in DATABASE_URL
+    // 2. 환경 변수 로드
+    // 팀원 참고: .env.example 파일을 복사하여 .env 파일을 만들고 DATABASE_URL을 채워주세요.
     dotenv().ok();
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
 
     info!("Connecting to database...");
     
-    // 3. Database connection pool
-    // Note for team: max_connections is set to 5 for local development. 
-    // This should be increased via environment variables for production environments.
+    // 3. 데이터베이스 커넥션 풀
+    // 팀원 참고: 임시로 로컬 개발 환경에서 max_connections를 5로 설정했습니다. 
+    // 실제 운영 환경에서는 값을 조정할 필요가 있음
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
         .connect(&db_url)
@@ -29,15 +29,14 @@ async fn main() {
     
     info!("Successfully connected to the database!");
 
-    // 4. Router setup
-    // Note for team: Register new API controllers/handlers here.
+    // 4. 라우터 설정
     let app = Router::new()
         .route("/api/ping", get(|| async { "pong!" }))
         .with_state(pool);
 
-    // 5. Server binding
-    // Note for team: Bound to 127.0.0.1 for local dev. 
-    // If deploying via Docker, change this to 0.0.0.0:8080.
+    // 5. 서버 바인딩
+    // 팀원 참고: 로컬 개발을 위해 127.0.0.1에 바인딩했습니다. 
+    // Docker를 통해 배포할 때는 변경 필요
     let listener = tokio::net::TcpListener::bind("127.0.0.1:8080")
     .await
     .expect("Failed to bind to port 8080. Is the port already in use?");
