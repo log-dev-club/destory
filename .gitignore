@@ -1,0 +1,29 @@
+# --- OS & IDE ---
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.bak
+
+# --- Environment Variables (Security!) ---
+.env
+**/.env
+.env.local
+.env.*.local
+
+# --- Rust (Backend) ---
+**/target/
+**/*.rs.bk
+Cargo.lock
+
+# --- Node.js (Frontend) ---
+**/node_modules/
+**/dist/
+**/.eslintcache
+**/npm-debug.log*
+
+# --- Compiled files ---
+*.exe
+*.dll
+*.so
+*.dylib
