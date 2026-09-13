@@ -209,3 +209,14 @@
   padding: 1px 4px;
   border-radius: 4px;
 }
+
+.write-form__error {
+  margin: 0;
+  font-size: 13px;
+  color: #f85149;
+}
+
+.write-form__submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}

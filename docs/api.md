@@ -1,0 +1,238 @@
+# destory REST API
+
+모든 경로는 `/api` 아래에 있고, 요청/응답 본문은 JSON(camelCase)입니다. 인증은 `session` HttpOnly 쿠키로 이루어지며, 로그인/회원가입 응답에서 자동으로 설정됩니다.
+
+공통 에러 응답:
+
+```json
+{ "error": "사용자에게 보여줄 수 있는 메시지" }
+```
+
+| 상태 | 의미 |
+|---|---|
+| 400 | 입력 검증 실패 (메시지에 이유) |
+| 401 | 로그인 필요 |
+| 403 | 본인 리소스가 아님 |
+| 404 | 리소스 없음 |
+| 409 | 중복 (닉네임, 첨부파일 hashedName) |
+| 413 | 첨부파일 크기 초과 (`MAX_UPLOAD_MB`) |
+
+## 공통 타입
+
+```ts
+interface Author { nickname: string; avatarUrl?: string }
+
+interface PostSummary {
+  id: number
+  title: string
+  excerpt: string
+  author: Author
+  tags: string[]
+  createdAt: string      // RFC 3339
+  updatedAt: string
+  commentCount: number
+  starCount: number
+  starred: boolean       // 요청자가 별을 눌렀는지 (비로그인 false)
+}
+
+interface PostDetail extends PostSummary {
+  content: string        // GFM Markdown 원문
+  attachments: Attachment[]
+}
+
+interface PostPage { items: PostSummary[]; page: number; limit: number; total: number }
+
+interface Comment {
+  id: number; postId: number; content: string; author: Author
+  createdAt: string; updatedAt: string
+}
+
+interface Attachment {
+  id: number; postId: number
+  originalName: string   // 사용자에게 보여줄 이름
+  hashedName: string     // 디스크 파일명 = sha256(`${sentAt}:${originalName}`) + 확장자
+  size: number           // bytes
+  sentAt: number         // ms epoch (Date.now())
+  downloadUrl: string    // "/api/attachments/{hashedName}"
+  createdAt: string
+}
+
+interface UserProfile {
+  id: number; nickname: string; avatarUrl?: string; bio?: string
+  createdAt: string
+  postCount: number      // 작성한 게시물 수
+  starCount: number      // 작성한 게시물이 받은 별 합계
+}
+
+interface TagCount { name: string; postCount: number }
+```
+
+## 인증
+
+### POST /api/auth/register
+```json
+{ "nickname": "alice", "password": "pass!word1" }
+```
+- 닉네임: 2~20자, 문자·숫자·`_`·`-`. 비밀번호: 8자 이상, 공백 없음, 특수문자(문자·숫자가 아닌 문자) 1개 이상.
+- 비밀번호 확인 일치 여부는 프론트엔드에서 검사한다 (서버는 `password` 하나만 받음).
+- 201 + `UserProfile`, `session` 쿠키 설정. 중복 닉네임은 409.
+
+### POST /api/auth/login
+```json
+{ "nickname": "alice", "password": "pass!word1" }
+```
+- 200 + `UserProfile`, `session` 쿠키 설정. 실패는 400 (닉네임/비밀번호 구분 없음).
+
+### POST /api/auth/logout
+- 204. 쿠키 제거.
+
+### GET /api/auth/me
+- 200 + `UserProfile`. 비로그인 401.
+
+## 사용자
+
+### GET /api/users/me
+- 200 + `UserProfile` (마이페이지 상단).
+
+### PATCH /api/users/me
+```json
+{ "nickname": "alice2", "avatarUrl": "https://example.com/a.png", "bio": "안녕하세요" }
+```
+- 모든 필드 선택. 생략한 필드는 유지. `avatarUrl`/`bio` 에 `""` 를 보내면 값을 지운다.
+- `avatarUrl` 은 http(s) URL, 500자 이하. `bio` 는 300자 이하.
+- 200 + `UserProfile`. 닉네임 중복 409.
+
+### PUT /api/users/me/password
+```json
+{ "currentPassword": "pass!word1", "newPassword": "new#pass2" }
+```
+- 새 비밀번호도 회원가입과 같은 규칙. 204. 다른 기기의 세션은 모두 만료되고 현재 세션은 새 쿠키로 재발급된다. 현재 비밀번호 불일치 400.
+
+### GET /api/users/me/posts
+- `GET /api/posts` 와 같은 쿼리 파라미터를 받고 내 게시물만 돌려준다. 200 + `PostPage`.
+
+### GET /api/users/{nickname}
+- 200 + `UserProfile`. 없으면 404.
+
+### GET /api/users/{nickname}/posts
+- 200 + `PostPage`.
+
+## 게시물
+
+### GET /api/posts
+쿼리 파라미터 (모두 선택):
+
+| 파라미터 | 예 | 의미 |
+|---|---|---|
+| `tag` | `react,frontend` | 쉼표로 구분. 모든 태그가 부분 일치해야 함 |
+| `user` | `yang` | 작성자 닉네임 부분 일치 |
+| `q` | `useTransition 검색` | 공백으로 구분. 각 단어가 제목·요약·닉네임·태그 중 하나에 포함되어야 함 |
+| `page` | `2` | 1부터. 기본 1 |
+| `limit` | `20` | 기본 20, 최대 100 |
+
+프론트엔드 `parseSearchQuery` 결과를 그대로 대응시키면 된다: `tags.join(',')` → `tag`, `users[0]` → `user`, `text.join(' ')` → `q`.
+
+- 200 + `PostPage`. 최신순(`createdAt DESC`).
+
+### POST /api/posts
+```json
+{
+  "title": "React 19 useTransition 정리",
+  "content": "# 문제\n\n대량 리스트 **필터링** ...",
+  "excerpt": "입력 지연 없이 리스트를 필터링하는 방법",
+  "tags": ["react", "frontend"]
+}
+```
+- `title` 1~200자, `content` 필수. `excerpt` 생략 시 본문 앞 150자에서 자동 생성 (최대 300자).
+- `tags` 는 소문자 정규화, 선행 `#` 제거, 중복 제거, 최대 10개·각 50자.
+- 201 + `PostDetail`. 저장 후 Discord Webhook 으로 제목·요약·링크를 보낸다 (실패해도 응답에는 영향 없음).
+
+### GET /api/posts/{id}
+- 200 + `PostDetail`. 없으면 404.
+
+### PATCH /api/posts/{id}
+```json
+{ "title": "수정된 제목", "tags": ["react", "hooks"] }
+```
+- 작성자만. 생략한 필드는 유지, `tags` 를 보내면 전체 교체. 200 + `PostDetail`.
+
+### DELETE /api/posts/{id}
+- 작성자만. 댓글·별·첨부파일(디스크 포함) 함께 삭제. 204.
+
+### PUT /api/posts/{id}/star · DELETE /api/posts/{id}/star
+- 로그인 필요. 멱등(두 번 눌러도 같은 결과).
+```json
+{ "starred": true, "starCount": 12 }
+```
+
+## 댓글
+
+### GET /api/posts/{id}/comments
+- 200 + `Comment[]` (오래된 순).
+
+### POST /api/posts/{id}/comments
+```json
+{ "content": "좋은 글이네요" }
+```
+- 로그인 필요. 1~2000자. 201 + `Comment`.
+
+### PATCH /api/comments/{id}
+```json
+{ "content": "수정된 댓글" }
+```
+- 댓글 작성자만. 200 + `Comment`.
+
+### DELETE /api/comments/{id}
+- 댓글 작성자 또는 게시물 작성자. 204.
+
+## 첨부파일
+
+### POST /api/posts/{id}/attachments
+`multipart/form-data`, 게시물 작성자만. 요청당 파일 하나.
+
+| 필드 | 값 |
+|---|---|
+| `file` | 파일 본문 (filename 필수) |
+| `hashedName` | `buildHashedRelease(file).hashedName` |
+| `sentAt` | `buildHashedRelease(file).sentAt` (ms epoch) |
+
+```ts
+const { hashedName, sentAt } = await buildHashedRelease(file)
+const form = new FormData()
+form.append('file', file)
+form.append('hashedName', hashedName)
+form.append('sentAt', String(sentAt))
+await fetch(`/api/posts/${postId}/attachments`, { method: 'POST', body: form })
+```
+- 서버가 `sha256("{sentAt}:{file.name}") + 확장자` 를 재계산해 `hashedName` 과 다르면 400.
+- 201 + `Attachment`. 같은 `hashedName` 이 이미 있으면 409. 크기 초과 413.
+
+### GET /api/posts/{id}/attachments
+- 200 + `Attachment[]`.
+
+### GET /api/attachments/{hashedName}
+- 파일 스트림. `Content-Disposition: attachment; filename*=UTF-8''<originalName>` 로 원본 이름 복원.
+- `<a href={attachment.downloadUrl} download>` 로 바로 사용 가능.
+
+### DELETE /api/attachments/{hashedName}
+- 게시물 작성자만. DB 행과 디스크 파일 삭제. 204.
+
+## 태그
+
+### GET /api/tags
+- 200 + `TagCount[]`. 게시물이 1개 이상인 태그만, 많이 쓰인 순.
+
+## 프론트엔드 연동 현황
+
+`src/api/` 의 fetch 래퍼를 통해 아래 화면이 연동되어 있다.
+
+| 화면 | 사용하는 API |
+|---|---|
+| Layout / Header | `GET /api/auth/me` (세션 확인, 닉네임 표시) |
+| LoginPage | `POST /api/auth/register`, `POST /api/auth/login` (비밀번호 확인·규칙은 클라이언트에서 선검사) |
+| HomePage | `GET /api/posts` (검색창 → `tag`/`user`/`q`, 250ms 디바운스) |
+| PostDetailPage | `GET /api/posts/{id}`, 댓글 목록/작성/삭제, 별 토글, 게시물 삭제, 첨부 다운로드 |
+| WritePage | `POST /api/posts` → 첨부파일마다 `POST /api/posts/{id}/attachments` |
+| MyPage | `GET /api/users/me/posts`, `PATCH /api/users/me`, `POST /api/auth/logout` |
+
+아직 UI 가 없는 API: 댓글 수정, 게시물 수정, 비밀번호 변경, 다른 사용자 프로필/게시물, 태그 목록.

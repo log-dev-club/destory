@@ -27,3 +27,5 @@ Cargo.lock
 *.dll
 *.so
 *.dylib
+# --- Uploaded files (Backend) ---
+api/uploads/

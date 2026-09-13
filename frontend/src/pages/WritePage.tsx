@@ -1,6 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import Markdown from '../components/Markdown'
+import type { LayoutContext } from '../components/Layout'
+import { createPost } from '../api/posts'
+import { uploadAttachment } from '../api/attachments'
 import { buildHashedRelease } from '../utils/hashFile'
 import type { HashedRelease } from '../utils/hashFile'
 import './WritePage.css'
@@ -60,18 +64,23 @@ const TOOLBAR_ACTIONS: ToolbarAction[] = [
 ]
 
 function WritePage() {
+  const { user } = useOutletContext<LayoutContext>()
+  const navigate = useNavigate()
+
   const [title, setTitle] = useState('')
   const [tagsInput, setTagsInput] = useState('')
   const [content, setContent] = useState('')
   const [activeTab, setActiveTab] = useState<'write' | 'preview'>('write')
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
   const [isHashing, setIsHashing] = useState(false)
-  const [submitted, setSubmitted] = useState<{
-    title: string
-    tags: string[]
-    attachments: HashedRelease[]
-  } | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // 비로그인이면 로그인 후 돌아오도록
+  useEffect(() => {
+    if (user === null) navigate('/login', { replace: true, state: { from: '/write' } })
+  }, [user, navigate])
 
   const runToolbarAction = (action: ToolbarAction) => {
     const textarea = textareaRef.current
@@ -105,18 +114,40 @@ function WritePage() {
     setAttachments((prev) => prev.filter((item) => item.hashed.hashedName !== hashedName))
   }
 
-  const handleSubmit = (event: FormEvent) => {
+  /**
+   * 1) POST /api/posts 로 게시물 저장 (서버가 Discord 알림 전송)
+   * 2) 응답 id 로 첨부파일을 하나씩 업로드 (hashedName/sentAt 은 서버가 재검증)
+   * 3) 상세 화면으로 이동
+   */
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
+    if (submitting || isHashing) return
     const tags = tagsInput
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean)
 
-    setSubmitted({
-      title,
-      tags,
-      attachments: attachments.map((item) => item.hashed),
-    })
+    setSubmitting(true)
+    setError(null)
+    try {
+      const post = await createPost({ title, content, tags })
+      const failed: string[] = []
+      for (const { file, hashed } of attachments) {
+        try {
+          await uploadAttachment(post.id, file, hashed)
+        } catch (err) {
+          failed.push(`${file.name}: ${err instanceof Error ? err.message : '업로드 실패'}`)
+        }
+      }
+      if (failed.length > 0) {
+        window.alert(`게시물은 저장되었지만 일부 첨부파일 업로드에 실패했습니다.\n${failed.join('\n')}`)
+      }
+      navigate(`/posts/${post.id}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '게시물 저장에 실패했습니다')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -224,30 +255,12 @@ function WritePage() {
           )}
         </div>
 
-        <button type="submit" className="write-form__submit">
-          게시하기
+        {error && <p className="write-form__error">{error}</p>}
+
+        <button type="submit" className="write-form__submit" disabled={submitting || isHashing}>
+          {submitting ? '저장 중...' : '게시하기'}
         </button>
       </form>
-
-      {submitted && (
-        <div className="write-preview">
-          <h2>서버로 전달될 데이터 미리보기</h2>
-          <p>
-            <strong>{submitted.title}</strong>
-          </p>
-          <p>태그: {submitted.tags.join(', ') || '없음'}</p>
-          {submitted.attachments.length > 0 && (
-            <ul>
-              {submitted.attachments.map((attachment) => (
-                <li key={attachment.hashedName}>
-                  {attachment.originalName} → <code>{attachment.hashedName}</code> (전송시각{' '}
-                  {new Date(attachment.sentAt).toLocaleString()})
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
     </div>
   )
 }

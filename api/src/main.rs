@@ -1,9 +1,22 @@
-use axum::{Router, routing::get};
+//! 부트스트랩만 담당한다. 비즈니스 로직은 services/, 라우팅은 routes/ 에 둔다.
+
+mod config;
+mod error;
+mod extract;
+mod handlers;
+mod models;
+mod routes;
+mod services;
+mod state;
+
+use std::sync::Arc;
+
 use dotenvy::dotenv;
 use sqlx::postgres::PgPoolOptions;
-use std::env;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
+
+use crate::{config::Config, state::AppState};
 
 #[tokio::main]
 async fn main() {
@@ -18,8 +31,7 @@ async fn main() {
         )
         .init();
 
-    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set in .env");
-    let port = env::var("SERVER_PORT").unwrap_or_else(|_| "8080".to_string());
+    let config = Arc::new(Config::from_env());
 
     info!("Connecting to database...");
 
@@ -28,7 +40,7 @@ async fn main() {
     // 실제 운영 환경에서는 값을 조정할 필요가 있음
     let pool = PgPoolOptions::new()
         .max_connections(5)
-        .connect(&db_url)
+        .connect(&config.database_url)
         .await
         .expect("Failed to connect to the database");
 
@@ -42,15 +54,27 @@ async fn main() {
 
     info!("Database migrations applied");
 
-    // 5. 라우터 설정
-    let app = Router::new()
-        .route("/api/ping", get(|| async { "pong!" }))
-        .with_state(pool);
+    // 5. 첨부파일 디렉토리 준비
+    tokio::fs::create_dir_all(&config.upload_dir)
+        .await
+        .expect("Failed to create upload directory");
 
-    // 6. 서버 바인딩
+    if config.discord_webhook_url.is_none() {
+        info!("DISCORD_WEBHOOK_URL 미설정: 게시물 알림을 보내지 않습니다");
+    }
+
+    // 6. 라우터 설정
+    let state = AppState {
+        pool,
+        config: config.clone(),
+        http: reqwest::Client::new(),
+    };
+    let app = routes::router(state);
+
+    // 7. 서버 바인딩
     // 팀원 참고: 로컬 개발을 위해 127.0.0.1에 바인딩했습니다.
     // Docker를 통해 배포할 때는 0.0.0.0 으로 변경 필요
-    let addr = format!("127.0.0.1:{port}");
+    let addr = format!("127.0.0.1:{}", config.server_port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}. Is the port already in use?"));

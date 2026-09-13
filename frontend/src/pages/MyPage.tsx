@@ -1,35 +1,156 @@
-import { mockPosts } from '../mock/posts'
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import PostCard from '../components/PostCard'
+import type { LayoutContext } from '../components/Layout'
+import { logout } from '../api/auth'
+import { fetchMyPosts } from '../api/posts'
+import { updateMyProfile } from '../api/users'
+import type { PostPage } from '../types'
 import './MyPage.css'
 
-const CURRENT_USER_NICKNAME = 'yangmin'
-
 function MyPage() {
-  const myPosts = mockPosts.filter((post) => post.author.nickname === CURRENT_USER_NICKNAME)
+  const { user, setUser } = useOutletContext<LayoutContext>()
+  const navigate = useNavigate()
+
+  const [posts, setPosts] = useState<PostPage | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [nickname, setNickname] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
+  const [bio, setBio] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  // 비로그인이면 로그인 화면으로
+  useEffect(() => {
+    if (user === null) navigate('/login', { replace: true, state: { from: '/me' } })
+  }, [user, navigate])
+
+  useEffect(() => {
+    if (!user) return
+    fetchMyPosts()
+      .then(setPosts)
+      .catch((err: Error) => setError(err.message))
+  }, [user])
+
+  const startEditing = () => {
+    if (!user) return
+    setNickname(user.nickname)
+    setAvatarUrl(user.avatarUrl ?? '')
+    setBio(user.bio ?? '')
+    setError(null)
+    setEditing(true)
+  }
+
+  const saveProfile = async (event: FormEvent) => {
+    event.preventDefault()
+    if (!user) return
+    setSaving(true)
+    setError(null)
+    try {
+      const updated = await updateMyProfile({
+        nickname: nickname.trim() !== user.nickname ? nickname.trim() : undefined,
+        avatarUrl: avatarUrl.trim(),
+        bio: bio.trim(),
+      })
+      setUser(updated)
+      setEditing(false)
+      // 닉네임이 바뀌면 목록의 author 도 바뀌므로 다시 조회
+      setPosts(await fetchMyPosts())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '저장에 실패했습니다')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } finally {
+      setUser(null)
+      navigate('/')
+    }
+  }
+
+  if (!user) {
+    return (
+      <div className="my-page">
+        <p className="my-page__empty">불러오는 중...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="my-page">
       <div className="my-page__profile">
         <div className="my-page__avatar">
-          <svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true">
-            <circle cx="12" cy="8" r="4" fill="currentColor" />
-            <path fill="currentColor" d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8v1H4z" />
-          </svg>
+          {user.avatarUrl ? (
+            <img src={user.avatarUrl} alt="" width="72" height="72" style={{ borderRadius: '50%' }} />
+          ) : (
+            <svg viewBox="0 0 24 24" width="48" height="48" aria-hidden="true">
+              <circle cx="12" cy="8" r="4" fill="currentColor" />
+              <path fill="currentColor" d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8v1H4z" />
+            </svg>
+          )}
         </div>
-        <div>
-          <h1>{CURRENT_USER_NICKNAME}</h1>
+        <div className="my-page__profile-text">
+          <h1>{user.nickname}</h1>
           <p className="my-page__stats">
-            게시물 {myPosts.length}개 · 받은 별 {myPosts.reduce((sum, post) => sum + post.starCount, 0)}개
+            게시물 {user.postCount}개 · 받은 별 {user.starCount}개
           </p>
+          {user.bio && <p className="my-page__bio">{user.bio}</p>}
+        </div>
+        <div className="my-page__actions">
+          <button type="button" onClick={startEditing}>
+            프로필 수정
+          </button>
+          <button type="button" onClick={handleLogout}>
+            로그아웃
+          </button>
         </div>
       </div>
 
+      {editing && (
+        <form className="profile-form" onSubmit={saveProfile}>
+          <label className="profile-form__field">
+            <span>닉네임</span>
+            <input type="text" value={nickname} onChange={(e) => setNickname(e.target.value)} required />
+          </label>
+          <label className="profile-form__field">
+            <span>아바타 URL (비우면 삭제)</span>
+            <input
+              type="url"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="https://..."
+            />
+          </label>
+          <label className="profile-form__field">
+            <span>소개 (비우면 삭제)</span>
+            <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3} maxLength={300} />
+          </label>
+          {error && <p className="profile-form__error">{error}</p>}
+          <div className="profile-form__buttons">
+            <button type="submit" disabled={saving}>
+              저장
+            </button>
+            <button type="button" onClick={() => setEditing(false)}>
+              취소
+            </button>
+          </div>
+        </form>
+      )}
+
       <h2 className="my-page__section-title">내가 작성한 게시물</h2>
-      {myPosts.length === 0 ? (
+      {!editing && error && <p className="my-page__empty">{error}</p>}
+      {posts === null ? (
+        <p className="my-page__empty">불러오는 중...</p>
+      ) : posts.items.length === 0 ? (
         <p className="my-page__empty">아직 작성한 게시물이 없습니다.</p>
       ) : (
         <div className="my-page__list">
-          {myPosts.map((post) => (
+          {posts.items.map((post) => (
             <PostCard key={post.id} post={post} />
           ))}
         </div>
