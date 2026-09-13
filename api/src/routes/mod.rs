@@ -16,7 +16,7 @@ pub fn router(state: AppState) -> Router {
 
     Router::new()
         .route("/api/ping", get(|| async { "pong!" }))
-        .merge(auth::router())
+        .merge(auth::router(&state.config))
         .merge(users::router())
         .merge(posts::router())
         .merge(comments::router())

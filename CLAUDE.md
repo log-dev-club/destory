@@ -38,8 +38,8 @@ destory/
 |---|---|
 | Backend | Rust (edition 2024), axum 0.8 (+axum-extra cookie), tokio, sqlx 0.8, serde, tracing, argon2, reqwest |
 | Frontend | React 19, TypeScript 5.9 (strict), Vite 8, react-router-dom 7, react-markdown + remark-gfm + rehype-highlight |
-| DB | PostgreSQL (sqlx `postgres` feature, 마이그레이션은 `sqlx::migrate!` 로 서버 기동 시 자동 적용) |
-| 인증 | 닉네임 + 비밀번호(argon2). 세션 토큰을 HttpOnly 쿠키(`session`)로 전달 |
+| DB | PostgreSQL (sqlx `postgres` feature). 서버 기동 시 DB 가 없으면 생성하고 마이그레이션을 자동 적용 |
+| 인증 | 닉네임 + 비밀번호(argon2) 또는 GitHub OAuth. 세션 토큰을 HttpOnly 쿠키(`session`)로 전달 |
 | 외부 연동 | Discord Webhook (게시물 업로드 알림) |
 
 ## 자주 쓰는 명령어
@@ -47,9 +47,9 @@ destory/
 ### Backend (`api/`)
 ```bash
 cd api
-cp .env.example .env      # 최초 1회, DATABASE_URL 채우기
+cp .env.example .env      # 최초 1회, DATABASE_URL 의 비밀번호만 본인 것으로 수정
 cargo check               # 빠른 타입 검사 (바이너리 생성 없음)
-cargo run                 # 서버 실행 → http://127.0.0.1:8080/api/ping
+cargo run                 # 서버 실행 → http://127.0.0.1:8080/api/ping (DB 없으면 자동 생성, 마이그레이션 자동 적용)
 cargo fmt                 # 코드 작성 완료 후 반드시 실행
 cargo clippy              # 린트
 ```
@@ -65,6 +65,10 @@ cargo clippy              # 린트
 | `MAX_UPLOAD_MB` | 100 | 첨부 업로드 본문 한도 |
 | `SESSION_TTL_DAYS` | 30 | 세션 쿠키 만료 |
 | `APP_BASE_URL` | http://localhost:5173 | Discord 알림 링크의 기준 URL |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | 없음 | GitHub OAuth App. 둘 다 있어야 GitHub 로그인 활성화 |
+| `GITHUB_REDIRECT_URL` | {APP_BASE_URL}/api/auth/github/callback | OAuth App 의 callback URL 과 동일해야 함 |
+| `AUTH_RATE_LIMIT_PER_MINUTE` | 10 | 로그인·회원가입·GitHub 시작의 IP 당 분당 요청 한도 |
+| `TRUST_PROXY_HEADERS` | false | 리버스 프록시 뒤에서만 true. X-Forwarded-For 의 IP 를 신뢰 |
 
 ### Frontend (`frontend/`)
 ```bash
@@ -91,6 +95,7 @@ api/src/
 ├── state.rs         # AppState { pool, config, http }. 모든 핸들러가 State<AppState> 로 받음
 ├── error.rs         # AppError → { "error": msg } + 상태 코드. sqlx/io/multipart 에러 From 변환 포함
 ├── extract.rs       # CurrentUser(로그인 필수, 401) / MaybeUser(선택) 추출기
+├── rate_limit.rs    # IP 당 요청 횟수 제한 레이어 (tower_governor). 무차별 대입 대상 라우터에만 적용
 ├── routes/          # 도메인별 Router<AppState> (auth, users, posts, comments, attachments, tags)
 ├── handlers/        # axum 핸들러. 요청 파싱 → 서비스 호출 → 응답 변환. DB 쿼리 작성 금지
 ├── services/        # 비즈니스 로직 + DB 접근 (검증, 트랜잭션, 첨부파일 해시 검증, Discord 알림)
@@ -121,7 +126,7 @@ frontend/src/
 ### DB 스키마
 | 테이블 | 마이그레이션 | 용도 | 주요 컬럼 |
 |---|---|---|---|
-| `users` | `..000000_init`, `..20260914000000` | 사용자 | `nickname` (UNIQUE), `password_hash` (argon2), `avatar_url`, `bio` |
+| `users` | `..init`, `..20260914000000`, `..20260914100000` | 사용자 | `nickname` (UNIQUE), `password_hash` (argon2, GitHub 가입은 빈 문자열), `avatar_url`, `bio`, `github_id` (UNIQUE), `github_login` |
 | `sessions` | `20260914000000_add_auth_stars_profile.sql` | 로그인 세션 | `token` (PK, 64 hex), `user_id`, `expires_at` |
 | `posts` | `20260913000000_init.sql` | 게시물 | `title`, `summary` (excerpt), `content` (GFM 원문), `created_at`, `updated_at` |
 | `tags` / `post_tags` | `20260913000000_init.sql` | 태그 (N:M) | `name` (UNIQUE, 소문자 정규화) |
@@ -129,6 +134,7 @@ frontend/src/
 | `post_stars` | `20260914000000_add_auth_stars_profile.sql` | 별 | PK(`post_id`, `user_id`) |
 | `post_attachments` | `20260913000001_add_post_attachments.sql` | 첨부 릴리즈 파일 | `post_id`, `original_name`, `hashed_name` (UNIQUE, 디스크 파일명), `size_bytes`, `sent_at` |
 
+- 데이터베이스 생성은 마이그레이션이 아니라 `main.rs` 시작 단계(`Postgres::create_database`)에서 한다. 마이그레이션 SQL 은 이미 접속한 DB 안에서 실행되므로 `CREATE DATABASE` 를 넣을 수 없다.
 - 스키마 변경은 기존 파일을 수정하지 말고 **새 마이그레이션 파일을 추가**한다. 이미 적용된 마이그레이션은 절대 수정하지 않는다. (수정하면 서버 기동 시 체크섬 불일치로 실패하며, 이미 적용한 팀원은 DB 를 지우고 다시 만들어야 한다.)
 - 파일명은 `YYYYMMDDHHMMSS_설명.sql` 형식 (타임스탬프 순서로 실행됨).
 - `post_attachments.hashed_name` 은 프론트엔드가 `SHA-256("{sentAt}:{originalName}")` + 확장자로 계산한 값이다. 서버는 업로드 시 같은 값을 재계산해 다르면 거부하고, 디스크에는 이 이름으로만 저장한다. 다운로드 시 `Content-Disposition` 에 `original_name` 을 넣어 준다.
@@ -141,7 +147,7 @@ frontend/src/
 - 목록은 `{ items, page, limit, total }` 페이지 형태. `page` 는 1부터, `limit` 기본 20·최대 100.
 - 목록 항목(`PostSummary`)에는 `content` 가 없고 상세(`PostDetail`)에만 있다. 상세에는 `attachments` 배열이 포함된다.
 - 검색: `?tag=react,frontend` (모두 포함, 부분 일치) · `?user=닉네임` (부분 일치) · `?q=단어1 단어2` (제목·요약·닉네임·태그 중 모두 포함).
-- 인증 필요 요청에 세션이 없으면 401, 남의 리소스를 수정하면 403, 없는 리소스는 404, 닉네임/해시 중복은 409.
+- 인증 필요 요청에 세션이 없으면 401, 남의 리소스를 수정하면 403, 없는 리소스는 404, 닉네임/해시 중복은 409, 요청 횟수 초과는 429 (`Retry-After` 헤더 포함).
 - 에러 응답 형식: `{ "error": "<메시지>" }` + HTTP 상태 코드. 메시지는 사용자에게 그대로 보여줄 수 있는 한국어.
 - 요청/응답 예시는 [docs/api.md](docs/api.md) 참고. 엔드포인트를 추가·변경하면 그 문서도 함께 갱신한다.
 
@@ -152,6 +158,9 @@ frontend/src/
 | POST | `/api/auth/login` | – | 로그인 → 세션 쿠키 발급 |
 | POST | `/api/auth/logout` | 필요 | 세션 삭제 |
 | GET | `/api/auth/me` | 필요 | 현재 사용자 프로필 |
+| GET | `/api/auth/providers` | – | 활성화된 외부 로그인 (`{ github }`) |
+| GET | `/api/auth/github` | – | GitHub 인가 화면으로 302 (로그인 상태면 계정 연동) |
+| GET | `/api/auth/github/callback` | – | GitHub 콜백 → 세션 발급 후 `/` 302, 실패 시 `/login?error=` |
 | GET / PATCH | `/api/users/me` | 필요 | 마이페이지 프로필 조회 / 수정 (`nickname`, `avatarUrl`, `bio`) |
 | PUT | `/api/users/me/password` | 필요 | 비밀번호 변경 (다른 세션 전부 만료) |
 | GET | `/api/users/me/posts` | 필요 | 내가 쓴 게시물 (검색 파라미터 동일) |
@@ -200,6 +209,8 @@ frontend/src/
 - 라우트는 `/api/...` prefix를 사용한다.
 - 사용자 입력 검증(길이, 형식)은 서비스 계층 진입부에서 하고 `AppError::BadRequest` 로 돌려준다. DB 제약에만 의존하지 않는다.
 - 비밀번호 해시 등 CPU 작업은 `tokio::task::spawn_blocking` 으로 감싼다.
+- 무차별 대입 대상이 되는 엔드포인트(로그인, 회원가입 등)를 추가하면 `routes/auth.rs` 처럼 `rate_limit::limit_per_ip` 로 감싼다. 일반 조회 API 에는 걸지 않는다.
+- 외부 로그인(OAuth)은 `services/github.rs` 패턴을 따른다: 인가 URL 생성 → state 쿠키 → 콜백에서 토큰 교환·사용자 조회 → `find_or_create`/`link`. 콜백은 브라우저 리다이렉트이므로 오류를 JSON 이 아니라 `/login?error=` 로 돌려보낸다.
 - 비밀번호 규칙은 백엔드 `services/auth.rs::validate_password` 와 프론트 `utils/password.ts` 두 곳에 있다. 바꿀 때 둘 다 수정한다.
 - DB 접근은 sqlx를 사용하고, 쿼리는 PostgreSQL 문법(`$1, $2` 바인딩)으로 작성한다.
 - 환경 변수는 `dotenvy` + `std::env`로 읽는다. 새 변수를 추가하면 `api/.env.example`에 설명과 함께 반드시 추가한다.

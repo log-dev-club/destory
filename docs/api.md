@@ -16,6 +16,7 @@
 | 404 | 리소스 없음 |
 | 409 | 중복 (닉네임, 첨부파일 hashedName) |
 | 413 | 첨부파일 크기 초과 (`MAX_UPLOAD_MB`) |
+| 429 | 요청 횟수 초과. `Retry-After` 헤더(초)에 재시도 가능 시각. 로그인·회원가입·GitHub 시작에만 적용 (IP 당 분당 `AUTH_RATE_LIMIT_PER_MINUTE`, 기본 10) |
 
 ## 공통 타입
 
@@ -88,6 +89,24 @@ interface TagCount { name: string; postCount: number }
 
 ### GET /api/auth/me
 - 200 + `UserProfile`. 비로그인 401.
+
+### GET /api/auth/providers
+```json
+{ "github": true }
+```
+- 서버에 설정된 외부 로그인 제공자. `false` 면 프론트는 버튼을 숨긴다.
+
+### GET /api/auth/github
+- 브라우저를 GitHub 인가 화면으로 302 리다이렉트한다. `fetch` 가 아니라 `window.location.href = '/api/auth/github'` 로 호출한다.
+- CSRF 방지용 `state` 를 10분짜리 HttpOnly 쿠키(`gh_oauth_state`)에 저장한다.
+- `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET` 미설정이면 404.
+
+### GET /api/auth/github/callback?code=&state=
+- GitHub 가 호출하는 콜백. 직접 호출하지 않는다.
+- 성공: `session` 쿠키 발급 후 `/` 로 302. **이미 로그인한 상태**였으면 현재 계정에 GitHub 를 연동하고 `/me` 로 302.
+- 실패(취소, state 불일치, 토큰 교환 실패 등): `/login?error=<메시지>` 로 302. JSON 에러를 돌려주지 않는다.
+- 처음 로그인하는 GitHub 계정은 사용자를 자동 생성한다. 닉네임은 GitHub login 을 닉네임 규칙에 맞게 다듬고 중복이면 `-2`, `-3` 을 붙인다. 아바타는 GitHub 프로필 사진. 비밀번호가 없으므로 비밀번호 로그인·변경은 불가.
+- 같은 GitHub 계정을 두 사용자에 연동할 수 없다 (409 → `/login?error=`).
 
 ## 사용자
 
@@ -229,7 +248,7 @@ await fetch(`/api/posts/${postId}/attachments`, { method: 'POST', body: form })
 | 화면 | 사용하는 API |
 |---|---|
 | Layout / Header | `GET /api/auth/me` (세션 확인, 닉네임 표시) |
-| LoginPage | `POST /api/auth/register`, `POST /api/auth/login` (비밀번호 확인·규칙은 클라이언트에서 선검사) |
+| LoginPage | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/providers`, GitHub 버튼 → `/api/auth/github` (비밀번호 확인·규칙은 클라이언트에서 선검사) |
 | HomePage | `GET /api/posts` (검색창 → `tag`/`user`/`q`, 250ms 디바운스) |
 | PostDetailPage | `GET /api/posts/{id}`, 댓글 목록/작성/삭제, 별 토글, 게시물 삭제, 첨부 다운로드 |
 | WritePage | `POST /api/posts` → 첨부파일마다 `POST /api/posts/{id}/attachments` |

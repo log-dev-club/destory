@@ -22,6 +22,9 @@ argon2 = "0.5"
 rand = "0.8"
 # 첨부파일 해시 검증 (프론트엔드 hashFile.ts 와 동일한 SHA-256)
 sha2 = "0.10"
+# 요청 횟수 제한 (로그인/회원가입 무차별 대입 방어)
+tower_governor = { version = "0.8", default-features = false, features = ["axum"] }
+governor = "0.10"
 # Discord Webhook 전송
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
