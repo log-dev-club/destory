@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { useLocation, useNavigate, useOutletContext } from 'react-router-dom'
-import { login, register } from '../api/auth'
+import { useLocation, useNavigate, useOutletContext, useSearchParams } from 'react-router-dom'
+import { fetchProviders, login, register, startGithubLogin } from '../api/auth'
 import type { LayoutContext } from '../components/Layout'
 import { PASSWORD_MIN_LENGTH, hasSpecialChar, validatePassword } from '../utils/password'
 import './LoginPage.css'
@@ -12,14 +12,23 @@ function LoginPage() {
   const { setUser } = useOutletContext<LayoutContext>()
   const navigate = useNavigate()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
   const redirectTo = (location.state as { from?: string } | null)?.from ?? '/'
 
   const [mode, setMode] = useState<Mode>('login')
   const [nickname, setNickname] = useState('')
   const [password, setPassword] = useState('')
   const [passwordConfirm, setPasswordConfirm] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  // GitHub 콜백이 실패하면 /login?error=메시지 로 돌아온다
+  const [error, setError] = useState<string | null>(() => searchParams.get('error'))
   const [submitting, setSubmitting] = useState(false)
+  const [githubEnabled, setGithubEnabled] = useState(false)
+
+  useEffect(() => {
+    fetchProviders()
+      .then((providers) => setGithubEnabled(providers.github))
+      .catch(() => setGithubEnabled(false))
+  }, [])
 
   const isRegister = mode === 'register'
   const lengthOk = [...password].length >= PASSWORD_MIN_LENGTH
@@ -115,6 +124,21 @@ function LoginPage() {
           {isRegister ? '가입하기' : '로그인'}
         </button>
       </form>
+
+      {githubEnabled && (
+        <>
+          <div className="login-page__divider">또는</div>
+          <button type="button" className="login-form__github" onClick={startGithubLogin}>
+            <svg viewBox="0 0 16 16" width="18" height="18" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"
+              />
+            </svg>
+            GitHub로 {isRegister ? '가입하기' : '로그인'}
+          </button>
+        </>
+      )}
       <p className="login-page__switch">
         {isRegister ? '이미 계정이 있나요?' : '계정이 없나요?'}{' '}
         <button type="button" onClick={switchMode}>

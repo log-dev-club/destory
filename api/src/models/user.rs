@@ -11,6 +11,8 @@ pub struct UserRow {
     pub password_hash: String,
     pub avatar_url: Option<String>,
     pub bio: Option<String>,
+    pub github_id: Option<i64>,
+    pub github_login: Option<String>,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
 }
@@ -34,6 +36,9 @@ pub struct UserProfile {
     pub avatar_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bio: Option<String>,
+    /// GitHub 로 가입/연동한 경우 GitHub 로그인명
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub github_login: Option<String>,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     /// 작성한 게시물 수

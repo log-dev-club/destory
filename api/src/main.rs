@@ -5,14 +5,15 @@ mod error;
 mod extract;
 mod handlers;
 mod models;
+mod rate_limit;
 mod routes;
 mod services;
 mod state;
 
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use dotenvy::dotenv;
-use sqlx::postgres::PgPoolOptions;
+use sqlx::{Postgres, migrate::MigrateDatabase, postgres::PgPoolOptions};
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -33,9 +34,28 @@ async fn main() {
 
     let config = Arc::new(Config::from_env());
 
+    // 3. 데이터베이스가 없으면 생성
+    // DATABASE_URL 의 계정으로 postgres 관리 DB 에 접속해 대상 DB 존재 여부를 확인하고 없으면 만든다.
+    // 마이그레이션은 이미 접속한 DB 안에서 실행되므로 CREATE DATABASE 는 여기서만 가능하다.
+    // (계정에 CREATEDB 권한이 필요. 로컬의 postgres 슈퍼유저는 기본으로 갖고 있음)
+    let db_exists = Postgres::database_exists(&config.database_url)
+        .await
+        .expect(
+            "Failed to check database existence. Is PostgreSQL running and DATABASE_URL correct?",
+        );
+    if !db_exists {
+        info!("Database not found, creating it...");
+        Postgres::create_database(&config.database_url)
+            .await
+            .expect(
+                "Failed to create database. Does the DATABASE_URL user have CREATEDB privilege?",
+            );
+        info!("Database created");
+    }
+
     info!("Connecting to database...");
 
-    // 3. 데이터베이스 커넥션 풀
+    // 4. 데이터베이스 커넥션 풀
     // 팀원 참고: 임시로 로컬 개발 환경에서 max_connections를 5로 설정했습니다.
     // 실제 운영 환경에서는 값을 조정할 필요가 있음
     let pool = PgPoolOptions::new()
@@ -46,7 +66,7 @@ async fn main() {
 
     info!("Successfully connected to the database!");
 
-    // 4. 마이그레이션 적용 (api/migrations/ 디렉토리의 SQL 파일을 순서대로 실행)
+    // 5. 마이그레이션 적용 (api/migrations/ 디렉토리의 SQL 파일을 순서대로 실행)
     sqlx::migrate!("./migrations")
         .run(&pool)
         .await
@@ -54,7 +74,7 @@ async fn main() {
 
     info!("Database migrations applied");
 
-    // 5. 첨부파일 디렉토리 준비
+    // 6. 첨부파일 디렉토리 준비
     tokio::fs::create_dir_all(&config.upload_dir)
         .await
         .expect("Failed to create upload directory");
@@ -63,7 +83,7 @@ async fn main() {
         info!("DISCORD_WEBHOOK_URL 미설정: 게시물 알림을 보내지 않습니다");
     }
 
-    // 6. 라우터 설정
+    // 7. 라우터 설정
     let state = AppState {
         pool,
         config: config.clone(),
@@ -71,7 +91,7 @@ async fn main() {
     };
     let app = routes::router(state);
 
-    // 7. 서버 바인딩
+    // 8. 서버 바인딩
     // 팀원 참고: 로컬 개발을 위해 127.0.0.1에 바인딩했습니다.
     // Docker를 통해 배포할 때는 0.0.0.0 으로 변경 필요
     let addr = format!("127.0.0.1:{}", config.server_port);
@@ -81,7 +101,11 @@ async fn main() {
 
     info!("Server is running on http://{addr}");
 
-    axum::serve(listener, app)
-        .await
-        .expect("Failed to start the web server");
+    // 요청 횟수 제한이 클라이언트 IP 를 알 수 있도록 ConnectInfo 를 붙인다
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .expect("Failed to start the web server");
 }
