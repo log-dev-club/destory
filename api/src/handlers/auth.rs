@@ -14,6 +14,7 @@ use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::{
+    config::Config,
     error::AppError,
     extract::{CurrentUser, MaybeUser, SESSION_COOKIE},
     models::{
@@ -28,13 +29,14 @@ use crate::{
 const GITHUB_STATE_COOKIE: &str = "gh_oauth_state";
 const GITHUB_STATE_TTL: time::Duration = time::Duration::minutes(10);
 
-/// 세션 쿠키 생성. HttpOnly + SameSite=Lax. (HTTPS 배포 시 `.secure(true)` 추가 필요)
-pub fn session_cookie(token: String, ttl: time::Duration) -> Cookie<'static> {
+/// 세션 쿠키 생성. HttpOnly + SameSite=Lax, COOKIE_SECURE=true 면 Secure (HTTPS 전용)
+pub fn session_cookie(token: String, config: &Config) -> Cookie<'static> {
     Cookie::build((SESSION_COOKIE, token))
         .path("/")
         .http_only(true)
+        .secure(config.cookie_secure)
         .same_site(SameSite::Lax)
-        .max_age(ttl)
+        .max_age(config.session_ttl)
         .build()
 }
 
@@ -50,7 +52,7 @@ async fn issue_session(
     let token =
         services::auth::create_session(&state.pool, user_id, state.config.session_ttl).await?;
     let profile = services::users::profile_by_id(&state.pool, user_id).await?;
-    let jar = jar.add(session_cookie(token, state.config.session_ttl));
+    let jar = jar.add(session_cookie(token, &state.config));
     Ok((jar, Json(profile)))
 }
 
@@ -101,10 +103,11 @@ pub async fn providers(State(state): State<AppState>) -> Json<Value> {
     Json(json!({ "github": state.config.github.is_some() }))
 }
 
-fn github_state_cookie(value: String) -> Cookie<'static> {
+fn github_state_cookie(value: String, secure: bool) -> Cookie<'static> {
     Cookie::build((GITHUB_STATE_COOKIE, value))
         .path("/api/auth/github")
         .http_only(true)
+        .secure(secure)
         .same_site(SameSite::Lax)
         .max_age(GITHUB_STATE_TTL)
         .build()
@@ -133,7 +136,7 @@ pub async fn github_start(
 
     let url = services::github::authorize_url(cfg, &oauth_state);
     Ok((
-        jar.add(github_state_cookie(oauth_state)),
+        jar.add(github_state_cookie(oauth_state, state.config.cookie_secure)),
         Redirect::to(&url),
     ))
 }
@@ -172,7 +175,7 @@ pub async fn github_callback(
                 .await
             {
                 Ok(token) => (
-                    jar.add(session_cookie(token, state.config.session_ttl)),
+                    jar.add(session_cookie(token, &state.config)),
                     Redirect::to(&redirect_to),
                 ),
                 Err(e) => {

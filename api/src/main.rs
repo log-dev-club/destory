@@ -92,9 +92,8 @@ async fn main() {
     let app = routes::router(state);
 
     // 8. 서버 바인딩
-    // 팀원 참고: 로컬 개발을 위해 127.0.0.1에 바인딩했습니다.
-    // Docker를 통해 배포할 때는 0.0.0.0 으로 변경 필요
-    let addr = format!("127.0.0.1:{}", config.server_port);
+    // 팀원 참고: 기본은 로컬 개발용 127.0.0.1. Docker 에서는 SERVER_HOST=0.0.0.0 으로 띄운다 (docker-compose.yml 참고)
+    let addr = format!("{}:{}", config.server_host, config.server_port);
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .unwrap_or_else(|_| panic!("Failed to bind to {addr}. Is the port already in use?"));
