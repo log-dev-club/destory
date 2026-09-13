@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/core'
 import { useEditorState } from '@tiptap/react'
+import { promptText } from '../../utils/textPrompt'
 import './BubbleToolbar.css'
 
 interface BubbleToolbarProps {
@@ -24,9 +25,10 @@ function BubbleToolbar({ editor }: BubbleToolbarProps) {
       editor.chain().focus().unsetLink().run()
       return
     }
-    const url = window.prompt('링크 URL을 입력하세요', 'https://')
-    if (!url) return
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+    promptText({ title: '링크 URL', placeholder: 'https://', confirmLabel: '적용' }).then((url) => {
+      if (!url) return
+      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
+    })
   }
 
   return (

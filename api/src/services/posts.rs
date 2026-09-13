@@ -1,7 +1,8 @@
 //! 게시물 CRUD, 검색/필터, 별(star)
 
-use std::collections::HashSet;
+use std::{collections::HashSet, sync::LazyLock};
 
+use regex::Regex;
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 
 use super::{attachments, like_pattern, truncate_chars};
@@ -17,6 +18,15 @@ const TITLE_MAX: usize = 200;
 const SUMMARY_MAX: usize = 300;
 const TAG_MAX_LEN: usize = 50;
 const TAG_MAX_COUNT: usize = 10;
+
+// 이미지: `![alt](url)` 통째로 제거 (base64 데이터 URI가 통째로 요약에 섞여 들어가는 것을 방지)
+static IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[[^\]]*\]\([^)]*\)").unwrap());
+// 링크: `[텍스트](url)` → "텍스트" 만 남김
+static LINK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
+// 인라인 수식: `$latex$` 통째로 제거
+// 팀원 참고: regex crate 는 선형 시간 보장을 위해 lookaround 를 지원하지 않아
+// "$100 그리고 $50" 같은 통화 표기 두 개가 한 줄에 있으면 오탐할 수 있음 (요약용이라 허용)
+static INLINE_MATH_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\$[^$\n]+\$").unwrap());
 
 /// 목록/상세 공용 SELECT. `PostRow` 의 필드와 컬럼명이 일치해야 한다.
 /// viewer 는 `starred` 계산용 (비로그인은 None → false).
@@ -184,30 +194,49 @@ fn resolve_summary(excerpt: Option<String>, content: &str) -> String {
     let explicit = excerpt
         .map(|e| e.trim().to_string())
         .filter(|e| !e.is_empty());
-    let summary = explicit.unwrap_or_else(|| {
-        let mut in_code = false;
-        let mut words: Vec<String> = Vec::new();
-        for line in content.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("```") {
-                in_code = !in_code;
-                continue;
-            }
-            if in_code || trimmed.is_empty() {
-                continue;
-            }
-            let cleaned: String = trimmed
-                .chars()
-                .filter(|c| !matches!(c, '#' | '*' | '`' | '>' | '_' | '~' | '[' | ']'))
-                .collect();
-            words.push(cleaned.split_whitespace().collect::<Vec<_>>().join(" "));
-            if words.join(" ").chars().count() >= 150 {
-                break;
-            }
-        }
-        truncate_chars(&words.join(" "), 150)
-    });
+    let summary = explicit.unwrap_or_else(|| generate_summary(content));
     truncate_chars(&summary, SUMMARY_MAX)
+}
+
+/// 코드 블록(```)과 블록 수식($$)은 통째로 건너뛰고, 이미지는 제거·링크는 텍스트만·
+/// 인라인 수식은 제거한 뒤 앞부분 150자를 요약으로 뽑는다
+fn generate_summary(content: &str) -> String {
+    let mut in_code = false;
+    let mut in_math_block = false;
+    let mut words: Vec<String> = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") {
+            in_code = !in_code;
+            continue;
+        }
+        if trimmed == "$$" {
+            in_math_block = !in_math_block;
+            continue;
+        }
+        if in_code || in_math_block || trimmed.is_empty() {
+            continue;
+        }
+
+        let without_images = IMAGE_RE.replace_all(trimmed, "");
+        let without_links = LINK_RE.replace_all(&without_images, "$1");
+        let without_math = INLINE_MATH_RE.replace_all(&without_links, "");
+        let cleaned: String = without_math
+            .chars()
+            .filter(|c| !matches!(c, '#' | '*' | '`' | '>' | '_' | '~' | '[' | ']'))
+            .collect();
+        let cleaned = cleaned.trim();
+        if cleaned.is_empty() {
+            continue;
+        }
+
+        words.push(cleaned.split_whitespace().collect::<Vec<_>>().join(" "));
+        if words.join(" ").chars().count() >= 150 {
+            break;
+        }
+    }
+    truncate_chars(&words.join(" "), 150)
 }
 
 /// 게시물의 태그를 통째로 교체

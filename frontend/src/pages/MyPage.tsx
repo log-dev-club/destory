@@ -98,6 +98,14 @@ function MyPage() {
           <h1>{user.nickname}</h1>
           <p className="my-page__stats">
             게시물 {user.postCount}개 · 받은 별 {user.starCount}개
+            {user.githubLogin && (
+              <>
+                {' · '}
+                <a href={`https://github.com/${user.githubLogin}`} target="_blank" rel="noreferrer">
+                  GitHub @{user.githubLogin}
+                </a>
+              </>
+            )}
           </p>
           {user.bio && <p className="my-page__bio">{user.bio}</p>}
         </div>

@@ -8,7 +8,7 @@ use crate::{
     models::user::{ChangePasswordRequest, UpdateProfileRequest, UserProfile, UserRow},
 };
 
-const PROFILE_SELECT: &str = "SELECT u.id, u.nickname, u.avatar_url, u.bio, u.created_at, \
+const PROFILE_SELECT: &str = "SELECT u.id, u.nickname, u.avatar_url, u.bio, u.github_login, u.created_at, \
      (SELECT count(*) FROM posts p WHERE p.user_id = u.id) AS post_count, \
      (SELECT count(*) FROM post_stars s JOIN posts p ON p.id = s.post_id WHERE p.user_id = u.id) AS star_count \
      FROM users u";

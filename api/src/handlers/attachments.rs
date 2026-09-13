@@ -15,7 +15,7 @@ use crate::{
     error::AppError,
     extract::CurrentUser,
     models::attachment::AttachmentDto,
-    services::{self, attachments::file_path, to_hex},
+    services::{self, attachments::file_path, percent_encode, to_hex},
     state::AppState,
 };
 
@@ -142,19 +142,6 @@ pub async fn list(
     Ok(Json(
         services::attachments::list_for_post(&state.pool, post_id).await?,
     ))
-}
-
-/// RFC 5987 filename* 용 percent-encoding (비예약 문자 외 전부 인코딩)
-fn percent_encode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() * 3);
-    for b in s.bytes() {
-        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
-            out.push(b as char);
-        } else {
-            out.push_str(&format!("%{b:02X}"));
-        }
-    }
-    out
 }
 
 /// 구형 클라이언트용 ASCII 대체 파일명

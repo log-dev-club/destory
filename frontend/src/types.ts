@@ -57,6 +57,8 @@ export interface UserProfile {
   nickname: string
   avatarUrl?: string
   bio?: string
+  /** GitHub 로 가입/연동한 경우 GitHub 로그인명 */
+  githubLogin?: string
   createdAt: string
   postCount: number
   starCount: number

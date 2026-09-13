@@ -1,5 +1,6 @@
 import type { Editor, Range } from '@tiptap/core'
 import { fileToCompressedDataUrl } from '../../utils/imageFile'
+import { promptText } from '../../utils/textPrompt'
 
 export interface SlashCommandItem {
   title: string
@@ -115,12 +116,13 @@ const ITEMS: SlashCommandItem[] = [
     icon: '∑',
     keywords: ['math', 'latex', 'formula', 'inline', '수식', '공식'],
     command: ({ editor, range }) => {
-      const latex = window.prompt('LaTeX 수식을 입력하세요', 'x^2 + y^2 = z^2')
-      if (!latex) {
-        editor.chain().focus().deleteRange(range).run()
-        return
-      }
-      editor.chain().focus().deleteRange(range).insertInlineMath({ latex }).run()
+      // 팝업은 비동기라 그동안 문서가 바뀔 수 있으므로, "/query" 텍스트는 먼저 지우고
+      // 팝업이 닫힌 뒤에는 (예전 range 가 아니라) 그 시점의 커서 위치에 삽입한다.
+      editor.chain().focus().deleteRange(range).run()
+      promptText({ title: '인라인 수식', placeholder: 'x^2 + y^2 = z^2' }).then((latex) => {
+        if (!latex) return
+        editor.chain().focus().insertInlineMath({ latex }).run()
+      })
     },
   },
   {
@@ -129,19 +131,13 @@ const ITEMS: SlashCommandItem[] = [
     icon: '∫',
     keywords: ['math', 'latex', 'formula', 'block', '수식', '공식', '블록'],
     command: ({ editor, range }) => {
-      const latex = window.prompt('LaTeX 수식을 입력하세요', '\\int_0^\\infty e^{-x}\\,dx = 1')
-      if (!latex) {
-        editor.chain().focus().deleteRange(range).run()
-        return
-      }
-      // insertBlockMath 커맨드는 내부적으로 insertContentAt 을 쓰는데, tiptap-markdown 이 그 커맨드를
-      // "마크다운 문자열 파싱" 용으로 덮어써서 노드 삽입과 충돌한다. insertContent 로 직접 넣어 우회한다.
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({ type: 'blockMath', attrs: { latex } })
-        .run()
+      editor.chain().focus().deleteRange(range).run()
+      promptText({ title: '블록 수식', placeholder: '\\int_0^\\infty e^{-x}\\,dx = 1' }).then((latex) => {
+        if (!latex) return
+        // insertBlockMath 커맨드는 내부적으로 insertContentAt 을 쓰는데, tiptap-markdown 이 그 커맨드를
+        // "마크다운 문자열 파싱" 용으로 덮어써서 노드 삽입과 충돌한다. insertContent 로 직접 넣어 우회한다.
+        editor.chain().focus().insertContent({ type: 'blockMath', attrs: { latex } }).run()
+      })
     },
   },
   {
@@ -154,7 +150,14 @@ const ITEMS: SlashCommandItem[] = [
       pickImageFile((file) => {
         fileToCompressedDataUrl(file)
           .then((dataUrl) => {
-            editor.chain().focus().setImage({ src: dataUrl, alt: file.name }).run()
+            // setImage 만 실행하면 삽입 직후 선택이 이미지 자체(NodeSelection)에 남아서,
+            // 사용자가 곧바로 이어서 타이핑하면 그 입력이 이미지를 통째로 지우고 대체해버린다.
+            // 이미지 뒤에 빈 문단을 함께 넣어 커서가 텍스트 위치(그 문단 안)에 놓이게 한다.
+            editor
+              .chain()
+              .focus()
+              .insertContent([{ type: 'image', attrs: { src: dataUrl, alt: file.name } }, { type: 'paragraph' }])
+              .run()
           })
           .catch(() => {
             window.alert('이미지를 불러오지 못했습니다')
