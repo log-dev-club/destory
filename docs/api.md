@@ -130,6 +130,21 @@ interface TagCount { name: string; postCount: number }
 ### GET /api/users/me/posts
 - `GET /api/posts` 와 같은 쿼리 파라미터를 받고 내 게시물만 돌려준다. 200 + `PostPage`.
 
+### GET /api/users/me/draft
+- 로그인 필요. 임시저장된 글이 있으면 200 + `Draft`, 없으면 200 + `null`.
+```ts
+interface Draft { title: string; content: string; tagsInput: string; updatedAt: string }
+```
+
+### PUT /api/users/me/draft
+```json
+{ "title": "쓰다 만 글", "content": "# 제목\n\n내용...", "tagsInput": "react, frontend" }
+```
+- 로그인 필요. 사용자당 1개, 있으면 덮어씀(upsert). 200 + `Draft`.
+
+### DELETE /api/users/me/draft
+- 로그인 필요. 임시저장 삭제(없어도 204).
+
 ### GET /api/users/{nickname}
 - 200 + `UserProfile`. 없으면 404.
 
@@ -251,7 +266,7 @@ await fetch(`/api/posts/${postId}/attachments`, { method: 'POST', body: form })
 | LoginPage | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/providers`, GitHub 버튼 → `/api/auth/github` (비밀번호 확인·규칙은 클라이언트에서 선검사) |
 | HomePage | `GET /api/posts` (검색창 → `tag`/`user`/`q`, 250ms 디바운스) |
 | PostDetailPage | `GET /api/posts/{id}`, 댓글 목록/작성/삭제, 별 토글, 게시물 삭제, 첨부 다운로드 |
-| WritePage | `POST /api/posts` → 첨부파일마다 `POST /api/posts/{id}/attachments` |
+| WritePage | `POST /api/posts` → 첨부파일마다 `POST /api/posts/{id}/attachments`, 임시저장은 `GET`/`PUT`/`DELETE /api/users/me/draft` |
 | MyPage | `GET /api/users/me/posts`, `PATCH /api/users/me`, `POST /api/auth/logout` |
 
 아직 UI 가 없는 API: 댓글 수정, 게시물 수정, 비밀번호 변경, 다른 사용자 프로필/게시물, 태그 목록.

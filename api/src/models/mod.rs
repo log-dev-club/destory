@@ -4,6 +4,7 @@
 pub mod attachment;
 pub mod auth;
 pub mod comment;
+pub mod draft;
 pub mod post;
 pub mod tag;
 pub mod user;

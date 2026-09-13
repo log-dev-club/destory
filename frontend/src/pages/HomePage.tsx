@@ -29,7 +29,7 @@ function HomePage() {
   return (
     <div className="home-page">
       <div className="home-page__header">
-        <h1>최신 게시물</h1>
+        <h1></h1>
         <Link className="home-page__write-link" to={user ? '/write' : '/login'} state={{ from: '/write' }}>
           Add
         </Link>

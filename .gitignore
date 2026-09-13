@@ -4,6 +4,7 @@
 .idea/
 *.swp
 *.bak
+.claude
 
 # --- Environment Variables (Security!) ---
 .env
