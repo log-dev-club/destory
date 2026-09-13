@@ -1,0 +1,120 @@
+.block-editor {
+  position: relative;
+}
+
+.block-editor__content {
+  min-height: 320px;
+  outline: none;
+  caret-color: var(--color-fg-default);
+}
+
+.block-editor__content p.is-editor-empty:first-child::before,
+.block-editor__content .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: var(--color-fg-subtle);
+  pointer-events: none;
+}
+
+.block-editor__content .ProseMirror-selectednode {
+  outline: 2px solid var(--color-accent-emphasis);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.block-editor__content .tiptap.dragging,
+.block-editor__content.dragging {
+  cursor: grabbing;
+}
+
+/* 노션처럼 헤딩/문단 사이 여백을 살짝 넉넉하게 */
+.block-editor__content h1,
+.block-editor__content h2,
+.block-editor__content h3 {
+  scroll-margin-top: 100px;
+}
+
+.block-editor__content ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 4px;
+  margin: 0 0 12px;
+}
+
+.block-editor__content ul[data-type='taskList'] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.block-editor__content ul[data-type='taskList'] li > label {
+  flex-shrink: 0;
+  margin-top: 3px;
+  user-select: none;
+}
+
+.block-editor__content ul[data-type='taskList'] li > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.block-editor__content ul[data-type='taskList'] li[data-checked='true'] > div {
+  color: var(--color-fg-muted);
+  text-decoration: line-through;
+}
+
+.block-editor__content input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--color-accent-emphasis);
+  cursor: pointer;
+}
+
+.block-editor__content table {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+  overflow: hidden;
+}
+
+.block-editor__content td,
+.block-editor__content th {
+  position: relative;
+  vertical-align: top;
+}
+
+.block-editor__content th {
+  background-color: var(--color-canvas-subtle);
+  font-weight: 600;
+  text-align: left;
+}
+
+/* Notion 스타일 드래그 핸들 */
+.drag-handle {
+  position: fixed;
+  z-index: 40;
+  width: 18px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: grab;
+  opacity: 1;
+  transition: background-color 0.1s ease;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 14px 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='16' viewBox='0 0 10 16' fill='%23848d97'%3E%3Ccircle cx='2.5' cy='2.5' r='1.5'/%3E%3Ccircle cx='7.5' cy='2.5' r='1.5'/%3E%3Ccircle cx='2.5' cy='8' r='1.5'/%3E%3Ccircle cx='7.5' cy='8' r='1.5'/%3E%3Ccircle cx='2.5' cy='13.5' r='1.5'/%3E%3Ccircle cx='7.5' cy='13.5' r='1.5'/%3E%3C/svg%3E");
+}
+
+.drag-handle:hover {
+  background-color: var(--color-neutral-muted);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.drag-handle.hide {
+  opacity: 0;
+  pointer-events: none;
+}

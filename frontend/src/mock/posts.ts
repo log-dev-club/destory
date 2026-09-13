@@ -48,6 +48,20 @@ function SearchableList({ items }: { items: Item[] }) {
     createdAt: '2026-09-01',
     commentCount: 4,
     starCount: 12,
+    comments: [
+      {
+        id: 'c1-1',
+        author: { nickname: 'jaehun' },
+        content: '이 방법 저희 프로젝트에도 바로 적용해볼게요. 감사합니다!',
+        createdAt: '2026-09-02',
+      },
+      {
+        id: 'c1-2',
+        author: { nickname: 'seoyeon' },
+        content: 'isPending으로 로딩 표시까지 해주면 UX가 더 좋아지겠네요.',
+        createdAt: '2026-09-03',
+      },
+    ],
   },
   {
     id: '2',
@@ -81,6 +95,14 @@ let pool = MySqlPoolOptions::new()
     createdAt: '2026-08-28',
     commentCount: 2,
     starCount: 7,
+    comments: [
+      {
+        id: 'c2-1',
+        author: { nickname: 'yangmin' },
+        content: 'max_connections 값은 어떤 기준으로 잡으신 건가요?',
+        createdAt: '2026-08-29',
+      },
+    ],
   },
   {
     id: '3',
@@ -107,6 +129,7 @@ body {
     createdAt: '2026-08-20',
     commentCount: 1,
     starCount: 5,
+    comments: [],
   },
   {
     id: '4',
@@ -131,6 +154,20 @@ async function hashReleaseFileName(file: File, sentAt: number) {
     createdAt: '2026-08-15',
     commentCount: 6,
     starCount: 20,
+    comments: [
+      {
+        id: 'c4-1',
+        author: { nickname: 'minsu' },
+        content: '확장자는 어떻게 별도로 보관하시나요? 해시값에는 포함 안 되는 거죠?',
+        createdAt: '2026-08-16',
+      },
+      {
+        id: 'c4-2',
+        author: { nickname: 'dohyun' },
+        content: '@minsu 네, 원본 파일명에서 추출해서 해시 뒤에 그대로 붙여줍니다.',
+        createdAt: '2026-08-16',
+      },
+    ],
   },
   {
     id: '5',
@@ -154,6 +191,7 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL
     createdAt: '2026-08-10',
     commentCount: 3,
     starCount: 9,
+    comments: [],
   },
   {
     id: '6',
@@ -183,6 +221,7 @@ function isUserResponse(value: unknown): value is UserResponse {
     createdAt: '2026-08-06',
     commentCount: 5,
     starCount: 14,
+    comments: [],
   },
   {
     id: '7',
@@ -206,6 +245,7 @@ LIMIT 20;
     createdAt: '2026-07-30',
     commentCount: 2,
     starCount: 11,
+    comments: [],
   },
   {
     id: '8',
@@ -229,6 +269,7 @@ test('버튼을 누르면 카운트가 증가한다', () => {
     createdAt: '2026-07-24',
     commentCount: 4,
     starCount: 16,
+    comments: [],
   },
   {
     id: '9',
@@ -252,6 +293,7 @@ enum PostError {
     createdAt: '2026-07-18',
     commentCount: 7,
     starCount: 18,
+    comments: [],
   },
   {
     id: '10',
@@ -271,5 +313,6 @@ enum PostError {
     createdAt: '2026-07-12',
     commentCount: 1,
     starCount: 8,
+    comments: [],
   },
 ]

@@ -1,11 +1,16 @@
+import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
+import CommentSection from '../components/CommentSection'
 import Markdown from '../components/Markdown'
+import { CURRENT_USER_NICKNAME } from '../constants'
 import { mockPosts } from '../mock/posts'
+import type { Comment } from '../types'
 import './PostDetailPage.css'
 
 function PostDetailPage() {
   const { id } = useParams<{ id: string }>()
   const post = mockPosts.find((item) => item.id === id)
+  const [comments, setComments] = useState<Comment[]>(post?.comments ?? [])
 
   if (!post) {
     return (
@@ -14,6 +19,16 @@ function PostDetailPage() {
         <Link to="/">목록으로 돌아가기</Link>
       </div>
     )
+  }
+
+  const handleAddComment = (content: string) => {
+    const newComment: Comment = {
+      id: `${post.id}-${Date.now()}`,
+      author: { nickname: CURRENT_USER_NICKNAME },
+      content,
+      createdAt: new Date().toISOString().slice(0, 10),
+    }
+    setComments((prev) => [...prev, newComment])
   }
 
   return (
@@ -37,13 +52,15 @@ function PostDetailPage() {
         </div>
         <div className="post-detail__stats">
           <span>★ {post.starCount}</span>
-          <span>💬 {post.commentCount}</span>
+          <span>💬 {comments.length}</span>
         </div>
       </div>
 
       <div className="post-detail__body">
         <Markdown content={post.content} />
       </div>
+
+      <CommentSection comments={comments} onAddComment={handleAddComment} />
     </article>
   )
 }

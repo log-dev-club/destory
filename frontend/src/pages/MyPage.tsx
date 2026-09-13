@@ -1,8 +1,7 @@
 import { mockPosts } from '../mock/posts'
 import PostCard from '../components/PostCard'
+import { CURRENT_USER_NICKNAME } from '../constants'
 import './MyPage.css'
-
-const CURRENT_USER_NICKNAME = 'yangmin'
 
 function MyPage() {
   const myPosts = mockPosts.filter((post) => post.author.nickname === CURRENT_USER_NICKNAME)

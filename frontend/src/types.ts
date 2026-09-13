@@ -3,6 +3,13 @@ export interface Author {
   avatarUrl?: string
 }
 
+export interface Comment {
+  id: string
+  author: Author
+  content: string
+  createdAt: string
+}
+
 export interface Post {
   id: string
   title: string
@@ -13,4 +20,5 @@ export interface Post {
   createdAt: string
   commentCount: number
   starCount: number
+  comments: Comment[]
 }
