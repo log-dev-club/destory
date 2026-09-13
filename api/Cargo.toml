@@ -4,14 +4,26 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
+axum-extra = { version = "0.10", features = ["cookie"] }
 tokio = { version = "1.40", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 
 sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "time", "uuid", "migrate"] }
+time = { version = "0.3", features = ["serde-well-known"] }
 
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 dotenvy = "0.15"
+thiserror = "2"
+
+# 인증: 비밀번호 해시(argon2), 세션 토큰(rand)
+argon2 = "0.5"
+rand = "0.8"
+# 첨부파일 해시 검증 (프론트엔드 hashFile.ts 와 동일한 SHA-256)
+sha2 = "0.10"
+# Discord Webhook 전송
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
