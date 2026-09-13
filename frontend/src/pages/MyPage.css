@@ -1,0 +1,52 @@
+.my-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.my-page__profile {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+
+.my-page__avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background-color: var(--color-canvas-subtle);
+  border: 1px solid var(--color-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-fg-muted);
+}
+
+.my-page__profile h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+}
+
+.my-page__stats {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 13px;
+}
+
+.my-page__section-title {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.my-page__empty {
+  color: var(--color-fg-muted);
+  padding: 24px 0;
+}
+
+.my-page__list {
+  display: flex;
+  flex-direction: column;
+}
