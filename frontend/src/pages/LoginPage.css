@@ -1,0 +1,140 @@
+.login-page {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: 48px 16px 64px;
+}
+
+.login-page h1 {
+  font-size: 20px;
+  margin: 0 0 20px;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.login-form__field input {
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--color-fg-default);
+  background-color: var(--color-canvas-default);
+}
+
+.login-form__field input:focus {
+  outline: 2px solid var(--color-accent-emphasis);
+  outline-offset: -1px;
+}
+
+.login-form__error {
+  margin: 0;
+  font-size: 13px;
+  color: #f85149;
+}
+
+.login-form__submit {
+  background-color: var(--color-accent-emphasis);
+  color: var(--color-fg-onEmphasis);
+  border: none;
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-form__submit:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.login-page__switch {
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--color-fg-muted);
+}
+
+.login-page__switch button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-accent-fg);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.login-form__rules {
+  list-style: none;
+  margin: -6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--color-fg-muted);
+}
+
+.login-form__rules li::before {
+  content: '○ ';
+}
+
+.login-form__rules li.is-ok {
+  color: var(--color-success-fg);
+}
+
+.login-form__rules li.is-ok::before {
+  content: '● ';
+}
+
+.login-form__field input[aria-invalid='true'] {
+  border-color: #f85149;
+}
+
+.login-page__divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 18px 0 12px;
+  font-size: 12px;
+  color: var(--color-fg-subtle);
+}
+
+.login-page__divider::before,
+.login-page__divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background-color: var(--color-border-muted);
+}
+
+.login-form__github {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background-color: var(--color-canvas-subtle);
+  color: var(--color-fg-default);
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-form__github:hover {
+  background-color: var(--color-neutral-muted);
+}

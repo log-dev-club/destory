@@ -1,0 +1,10 @@
+# 줄바꿈을 LF로 통일 (Windows 의 core.autocrlf 설정과 무관하게 동작)
+# rustfmt.toml 의 newline_style = "Unix" 와 일치시킴
+* text=auto eol=lf
+
+# 바이너리 파일
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.woff binary
+*.woff2 binary

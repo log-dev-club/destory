@@ -1,0 +1,12 @@
+# cargo fmt: Code formatting
+# cargo check: Fast syntax and type checking (no binary output)
+
+
+max_width = 100
+edition = "2024"
+newline_style = "Unix"
+
+match_block_trailing_comma = true
+merge_derives = true
+reorder_imports = true
+reorder_modules = true
