@@ -1,0 +1,23 @@
+# SITE_ADDRESS 예:
+#   :80                     → HTTP 만 (개인 PC, 내부망, 도메인 없음)
+#   destory.example.com     → 도메인. Caddy 가 Let's Encrypt 인증서를 자동 발급·갱신 (80/443 포트 외부 개방 필요)
+{$SITE_ADDRESS::80} {
+    encode gzip
+
+    # /api/* 는 백엔드 컨테이너로. X-Forwarded-For 는 Caddy 가 자동으로 붙인다 (TRUST_PROXY_HEADERS=true 와 짝)
+    handle /api/* {
+        reverse_proxy api:8080
+    }
+
+    # 나머지는 정적 파일. 없는 경로는 index.html 로 (react-router 새로고침 대응)
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+
+    # 첨부파일 업로드 한도. 백엔드 MAX_UPLOAD_MB 와 맞춘다
+    request_body {
+        max_size {$MAX_UPLOAD_MB:100}MB
+    }
+}

@@ -50,7 +50,7 @@ pub async fn change_password(
         services::auth::create_session(&state.pool, user.id, state.config.session_ttl).await?;
     Ok((
         StatusCode::NO_CONTENT,
-        jar.add(session_cookie(token, state.config.session_ttl)),
+        jar.add(session_cookie(token, &state.config)),
     ))
 }
 
