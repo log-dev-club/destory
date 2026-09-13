@@ -1,0 +1,77 @@
+.text-prompt-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(1, 4, 9, 0.6);
+}
+
+.text-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(420px, calc(100vw - 48px));
+  padding: 20px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border-default);
+  background-color: var(--color-canvas-default);
+  box-shadow: 0 16px 40px rgba(1, 4, 9, 0.5);
+}
+
+.text-prompt__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-fg-default);
+}
+
+.text-prompt__input {
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--color-fg-default);
+  background-color: var(--color-canvas-subtle);
+}
+
+.text-prompt__input:focus {
+  outline: 2px solid var(--color-accent-emphasis);
+  outline-offset: -1px;
+}
+
+.text-prompt__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.text-prompt__cancel,
+.text-prompt__confirm {
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.text-prompt__cancel {
+  border: 1px solid var(--color-border-default);
+  background-color: transparent;
+  color: var(--color-fg-default);
+}
+
+.text-prompt__cancel:hover {
+  background-color: var(--color-neutral-muted);
+}
+
+.text-prompt__confirm {
+  border: none;
+  background-color: var(--color-accent-emphasis);
+  color: var(--color-fg-onEmphasis);
+}
+
+.text-prompt__confirm:hover {
+  opacity: 0.9;
+}

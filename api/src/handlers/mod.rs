@@ -3,6 +3,7 @@
 pub mod attachments;
 pub mod auth;
 pub mod comments;
+pub mod drafts;
 pub mod posts;
 pub mod tags;
 pub mod users;

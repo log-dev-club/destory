@@ -1,10 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
-import Markdown from '../components/Markdown'
+import BlockEditor from '../components/editor/BlockEditor'
+import type { BlockEditorHandle } from '../components/editor/BlockEditor'
 import type { LayoutContext } from '../components/Layout'
 import { createPost } from '../api/posts'
 import { uploadAttachment } from '../api/attachments'
+import { deleteDraft, fetchDraft, saveDraft } from '../api/drafts'
+import type { Draft } from '../api/drafts'
+import { ApiError } from '../api/client'
 import { buildHashedRelease } from '../utils/hashFile'
 import type { HashedRelease } from '../utils/hashFile'
 import './WritePage.css'
@@ -14,54 +18,15 @@ interface AttachedFile {
   hashed: HashedRelease
 }
 
-interface ToolbarAction {
-  label: string
-  title: string
-  apply: (value: string, selectionStart: number, selectionEnd: number) => {
-    value: string
-    selectionStart: number
-    selectionEnd: number
-  }
+const AUTOSAVE_DELAY_MS = 1500
+
+function formatSavedAt(iso: string) {
+  return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 }
 
-function wrapSelection(before: string, after: string, placeholder: string) {
-  return (value: string, selectionStart: number, selectionEnd: number) => {
-    const selected = value.slice(selectionStart, selectionEnd) || placeholder
-    const nextValue = value.slice(0, selectionStart) + before + selected + after + value.slice(selectionEnd)
-    return {
-      value: nextValue,
-      selectionStart: selectionStart + before.length,
-      selectionEnd: selectionStart + before.length + selected.length,
-    }
-  }
+function isDraftEmpty(draft: Pick<Draft, 'title' | 'tagsInput' | 'content'>) {
+  return !draft.title.trim() && !draft.tagsInput.trim() && !draft.content.trim()
 }
-
-function prefixLine(prefix: string) {
-  return (value: string, selectionStart: number, selectionEnd: number) => {
-    const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
-    const nextValue = value.slice(0, lineStart) + prefix + value.slice(lineStart)
-    return {
-      value: nextValue,
-      selectionStart: selectionStart + prefix.length,
-      selectionEnd: selectionEnd + prefix.length,
-    }
-  }
-}
-
-const TOOLBAR_ACTIONS: ToolbarAction[] = [
-  { label: 'H', title: '제목', apply: prefixLine('## ') },
-  { label: 'B', title: '굵게', apply: wrapSelection('**', '**', '굵은 텍스트') },
-  { label: 'I', title: '기울임', apply: wrapSelection('*', '*', '기울임 텍스트') },
-  { label: '`code`', title: '인라인 코드', apply: wrapSelection('`', '`', 'code') },
-  {
-    label: '{ }',
-    title: '코드 블록',
-    apply: wrapSelection('\n```\n', '\n```\n', '여기에 코드를 입력하세요'),
-  },
-  { label: '"', title: '인용', apply: prefixLine('> ') },
-  { label: '•', title: '목록', apply: prefixLine('- ') },
-  { label: '🔗', title: '링크', apply: wrapSelection('[', '](https://)', '링크 텍스트') },
-]
 
 function WritePage() {
   const { user } = useOutletContext<LayoutContext>()
@@ -70,28 +35,70 @@ function WritePage() {
   const [title, setTitle] = useState('')
   const [tagsInput, setTagsInput] = useState('')
   const [content, setContent] = useState('')
-  const [activeTab, setActiveTab] = useState<'write' | 'preview'>('write')
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
   const [isHashing, setIsHashing] = useState(false)
+  const [draftBanner, setDraftBanner] = useState<Draft | null>(null)
+  const [draftChecked, setDraftChecked] = useState(false)
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const editorRef = useRef<BlockEditorHandle>(null)
 
-  // 비로그인이면 로그인 후 돌아오도록
+  // 비로그인이면 로그인 후 이 페이지로 돌아오도록
   useEffect(() => {
     if (user === null) navigate('/login', { replace: true, state: { from: '/write' } })
   }, [user, navigate])
 
-  const runToolbarAction = (action: ToolbarAction) => {
-    const textarea = textareaRef.current
-    if (!textarea) return
+  // 로그인 확인되면 서버에 저장된 임시저장이 있는지 확인
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    fetchDraft()
+      .then((draft) => {
+        if (!cancelled && draft && !isDraftEmpty(draft)) setDraftBanner(draft)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setDraftChecked(true)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user])
 
-    const result = action.apply(content, textarea.selectionStart, textarea.selectionEnd)
-    setContent(result.value)
-    requestAnimationFrame(() => {
-      textarea.focus()
-      textarea.setSelectionRange(result.selectionStart, result.selectionEnd)
-    })
+  // 자동 임시저장 (디바운스). 복원 배너가 떠 있는 동안엔 덮어쓰지 않는다
+  useEffect(() => {
+    if (!user || !draftChecked || draftBanner) return
+    if (!title.trim() && !tagsInput.trim() && !content.trim()) return
+
+    const timer = window.setTimeout(() => {
+      saveDraft({ title, content, tagsInput })
+        .then((saved) => setLastSavedAt(saved.updatedAt))
+        .catch(() => {})
+    }, AUTOSAVE_DELAY_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [user, title, tagsInput, content, draftChecked, draftBanner])
+
+  const handleRestoreDraft = () => {
+    if (!draftBanner) return
+    setTitle(draftBanner.title)
+    setTagsInput(draftBanner.tagsInput)
+    setContent(draftBanner.content)
+    editorRef.current?.setContent(draftBanner.content)
+    setLastSavedAt(draftBanner.updatedAt)
+    setDraftBanner(null)
+  }
+
+  const handleDiscardDraft = () => {
+    setDraftBanner(null)
+    deleteDraft().catch(() => {})
+  }
+
+  const handleSaveDraft = () => {
+    saveDraft({ title, content, tagsInput })
+      .then((saved) => setLastSavedAt(saved.updatedAt))
+      .catch((err: unknown) => setError(err instanceof ApiError ? err.message : '임시저장에 실패했습니다'))
   }
 
   const handleFilesSelected = async (fileList: FileList | null) => {
@@ -116,12 +123,14 @@ function WritePage() {
 
   /**
    * 1) POST /api/posts 로 게시물 저장 (서버가 Discord 알림 전송)
-   * 2) 응답 id 로 첨부파일을 하나씩 업로드 (hashedName/sentAt 은 서버가 재검증)
-   * 3) 상세 화면으로 이동
+   * 2) 응답 id 로 첨부파일을 하나씩 업로드
+   * 3) 임시저장 삭제 후 상세 화면으로 이동
    */
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
     if (submitting || isHashing) return
+    if (!title.trim() || !content.trim()) return
+
     const tags = tagsInput
       .split(',')
       .map((tag) => tag.trim())
@@ -131,6 +140,7 @@ function WritePage() {
     setError(null)
     try {
       const post = await createPost({ title, content, tags })
+
       const failed: string[] = []
       for (const { file, hashed } of attachments) {
         try {
@@ -142,100 +152,62 @@ function WritePage() {
       if (failed.length > 0) {
         window.alert(`게시물은 저장되었지만 일부 첨부파일 업로드에 실패했습니다.\n${failed.join('\n')}`)
       }
+
+      await deleteDraft().catch(() => {})
       navigate(`/posts/${post.id}`)
     } catch (err) {
-      setError(err instanceof Error ? err.message : '게시물 저장에 실패했습니다')
+      setError(err instanceof ApiError ? err.message : '게시물 저장에 실패했습니다')
     } finally {
       setSubmitting(false)
     }
   }
 
+  // 로그인 확인 전이거나 비로그인으로 리다이렉트되는 중에는 그리지 않는다
+  if (!user) return null
+
   return (
     <div className="write-page">
-      <h1>새 게시물 작성</h1>
-      <form className="write-form" onSubmit={handleSubmit}>
-        <label className="write-form__field">
-          <span>제목</span>
-          <input
-            type="text"
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="게시물 제목을 입력하세요"
-            required
-          />
-        </label>
-
-        <label className="write-form__field">
-          <span>태그</span>
-          <input
-            type="text"
-            value={tagsInput}
-            onChange={(event) => setTagsInput(event.target.value)}
-            placeholder="쉼표(,)로 구분해서 입력하세요 (예: react, frontend)"
-          />
-        </label>
-
-        <div className="write-form__field">
-          <span>내용 (마크다운 지원)</span>
-          <div className="markdown-editor">
-            <div className="markdown-editor__toolbar">
-              {TOOLBAR_ACTIONS.map((action) => (
-                <button
-                  key={action.title}
-                  type="button"
-                  title={action.title}
-                  onClick={() => runToolbarAction(action)}
-                >
-                  {action.label}
-                </button>
-              ))}
-              <div className="markdown-editor__tabs">
-                <button
-                  type="button"
-                  className={activeTab === 'write' ? 'is-active' : ''}
-                  onClick={() => setActiveTab('write')}
-                >
-                  작성
-                </button>
-                <button
-                  type="button"
-                  className={activeTab === 'preview' ? 'is-active' : ''}
-                  onClick={() => setActiveTab('preview')}
-                >
-                  미리보기
-                </button>
-              </div>
-            </div>
-
-            {activeTab === 'write' ? (
-              <textarea
-                ref={textareaRef}
-                className="markdown-editor__textarea"
-                value={content}
-                onChange={(event) => setContent(event.target.value)}
-                rows={14}
-                placeholder="마크다운으로 내용을 작성하세요. 코드 블록은 ``` 로 감싸주세요."
-                required
-              />
-            ) : (
-              <div className="markdown-editor__preview">
-                {content ? (
-                  <Markdown content={content} />
-                ) : (
-                  <p className="markdown-editor__preview-empty">미리볼 내용이 없습니다.</p>
-                )}
-              </div>
-            )}
+      {draftBanner && (
+        <div className="write-draft-banner">
+          <span>{formatSavedAt(draftBanner.updatedAt)}에 임시저장된 글이 있습니다.</span>
+          <div className="write-draft-banner__actions">
+            <button type="button" onClick={handleRestoreDraft}>
+              불러오기
+            </button>
+            <button type="button" onClick={handleDiscardDraft}>
+              삭제
+            </button>
           </div>
         </div>
+      )}
 
-        <div className="write-form__field">
-          <span>릴리즈 파일 첨부 (zip, exe 등)</span>
-          <input
-            type="file"
-            multiple
-            onChange={(event) => handleFilesSelected(event.target.files)}
-          />
+      <form className="write-form" onSubmit={handleSubmit}>
+        <input
+          className="write-form__title"
+          type="text"
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          placeholder="제목을 입력하세요"
+          required
+        />
+
+        <input
+          className="write-form__tags"
+          type="text"
+          value={tagsInput}
+          onChange={(event) => setTagsInput(event.target.value)}
+          placeholder="태그 추가 (쉼표로 구분, 예: react, frontend)"
+        />
+
+        <div className="write-form__editor">
+          <BlockEditor ref={editorRef} onChange={setContent} />
+        </div>
+
+        <div className="write-form__attachments">
+          <label className="write-form__attachments-label">
+            릴리즈 파일 첨부 (zip, exe 등)
+            <input type="file" multiple onChange={(event) => handleFilesSelected(event.target.files)} />
+          </label>
           {isHashing && <p className="write-form__hint">파일 이름을 해싱하는 중...</p>}
 
           {attachments.length > 0 && (
@@ -257,9 +229,19 @@ function WritePage() {
 
         {error && <p className="write-form__error">{error}</p>}
 
-        <button type="submit" className="write-form__submit" disabled={submitting || isHashing}>
-          {submitting ? '저장 중...' : '게시하기'}
-        </button>
+        <div className="write-form__actions">
+          <button
+            type="submit"
+            className="write-form__submit"
+            disabled={submitting || isHashing || !title.trim() || !content.trim()}
+          >
+            {submitting ? '게시 중...' : '게시하기'}
+          </button>
+          <button type="button" className="write-form__draft-save" onClick={handleSaveDraft} disabled={submitting}>
+            임시저장
+          </button>
+          {lastSavedAt && <span className="write-form__saved-at">{formatSavedAt(lastSavedAt)}에 저장됨</span>}
+        </div>
       </form>
     </div>
   )

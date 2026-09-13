@@ -4,6 +4,7 @@ pub mod attachments;
 pub mod auth;
 pub mod comments;
 pub mod discord;
+pub mod drafts;
 pub mod github;
 pub mod posts;
 pub mod tags;
