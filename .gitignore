@@ -4,6 +4,7 @@
 .idea/
 *.swp
 *.bak
+.claude
 
 # --- Environment Variables (Security!) ---
 .env
@@ -27,3 +28,5 @@ Cargo.lock
 *.dll
 *.so
 *.dylib
+# --- Uploaded files (Backend) ---
+api/uploads/

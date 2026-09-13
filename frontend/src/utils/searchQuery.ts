@@ -1,4 +1,4 @@
-import type { Post } from '../types'
+import type { PostListParams } from '../api/posts'
 
 export interface ParsedSearchQuery {
   tags: string[]
@@ -8,6 +8,7 @@ export interface ParsedSearchQuery {
 
 const PREFIX_PATTERN = /^(tag|user):(.+)$/i
 
+/** 검색창 입력을 tag:/user:/자유 텍스트로 분리 */
 export function parseSearchQuery(query: string): ParsedSearchQuery {
   const tags: string[] = []
   const users: string[] = []
@@ -33,31 +34,15 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
   return { tags, users, text }
 }
 
-export function matchesSearchQuery(post: Post, parsed: ParsedSearchQuery): boolean {
-  const { tags, users, text } = parsed
-
-  if (tags.length > 0) {
-    const postTags = post.tags.map((tag) => tag.toLowerCase())
-    if (!tags.every((tag) => postTags.some((postTag) => postTag.includes(tag)))) {
-      return false
-    }
+/** 파싱 결과를 GET /api/posts 쿼리 파라미터로 변환 */
+export function toPostListParams(parsed: ParsedSearchQuery): PostListParams {
+  return {
+    tag: parsed.tags.join(',') || undefined,
+    user: parsed.users[0],
+    q: parsed.text.join(' ') || undefined,
   }
+}
 
-  if (users.length > 0) {
-    const nickname = post.author.nickname.toLowerCase()
-    if (!users.every((user) => nickname.includes(user))) {
-      return false
-    }
-  }
-
-  if (text.length > 0) {
-    const haystack = [post.title, post.excerpt, post.author.nickname, ...post.tags]
-      .join(' ')
-      .toLowerCase()
-    if (!text.every((word) => haystack.includes(word))) {
-      return false
-    }
-  }
-
-  return true
+export function isEmptyQuery(parsed: ParsedSearchQuery): boolean {
+  return parsed.tags.length === 0 && parsed.users.length === 0 && parsed.text.length === 0
 }

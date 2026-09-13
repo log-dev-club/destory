@@ -14,17 +14,20 @@
 ```
 destory/
 ├── api/                    # Rust 백엔드 (axum + sqlx + tokio)
-│   ├── src/main.rs         # 진입점: .env 로드 → 로깅 → DB 풀 → 마이그레이션 → 라우터 → 서버
+│   ├── src/                # 모듈 구성은 아래 "Backend 모듈 구성" 참고
 │   ├── migrations/         # sqlx 마이그레이션 SQL (파일명: YYYYMMDDHHMMSS_설명.sql)
+│   ├── uploads/            # 첨부파일 저장소 (gitignore, UPLOAD_DIR 로 변경 가능)
 │   ├── Cargo.toml
 │   ├── rustfmt.toml        # 포맷 규칙 (max_width=100, edition 2024)
 │   └── .env.example        # 환경 변수 템플릿 (.env 는 커밋 금지)
-├── frontend/               # React 19 + TypeScript + Vite 8
+├── frontend/               # React 19 + TypeScript + Vite 8 + react-router 7
 │   ├── src/main.tsx        # 진입점
-│   ├── src/App.tsx         # 레이아웃 골격 (헤더 + 게시물 목록)
-│   ├── src/index.css       # 블랙 테마 CSS 변수 및 전역 스타일
+│   ├── src/App.tsx         # 라우팅 (/, /write, /me, /posts/:id)
+│   ├── src/types.ts        # API 응답 타입 (백엔드 DTO 와 필드명 일치)
+│   ├── src/api/            # fetch 래퍼 (도메인별)
 │   ├── vite.config.ts      # /api → http://127.0.0.1:8080 프록시
 │   └── eslint.config.js
+├── docs/api.md             # REST API 상세 명세 (요청/응답 예시)
 ├── .gitignore
 └── CLAUDE.md
 ```
@@ -33,9 +36,10 @@ destory/
 
 | 영역 | 스택 |
 |---|---|
-| Backend | Rust (edition 2024), axum 0.8, tokio, sqlx 0.8, serde, tracing, dotenvy |
-| Frontend | React 19, TypeScript 5.9 (strict), Vite 8, ESLint 9 (flat config) |
+| Backend | Rust (edition 2024), axum 0.8 (+axum-extra cookie), tokio, sqlx 0.8, serde, tracing, argon2, reqwest |
+| Frontend | React 19, TypeScript 5.9 (strict), Vite 8, react-router-dom 7, react-markdown + remark-gfm + rehype-highlight |
 | DB | PostgreSQL (sqlx `postgres` feature, 마이그레이션은 `sqlx::migrate!` 로 서버 기동 시 자동 적용) |
+| 인증 | 닉네임 + 비밀번호(argon2). 세션 토큰을 HttpOnly 쿠키(`session`)로 전달 |
 | 외부 연동 | Discord Webhook (게시물 업로드 알림) |
 
 ## 자주 쓰는 명령어
@@ -49,6 +53,18 @@ cargo run                 # 서버 실행 → http://127.0.0.1:8080/api/ping
 cargo fmt                 # 코드 작성 완료 후 반드시 실행
 cargo clippy              # 린트
 ```
+
+### 환경 변수 (`api/.env`)
+| 키 | 기본값 | 설명 |
+|---|---|---|
+| `DATABASE_URL` | (필수) | `postgres://user:pw@localhost:5432/destory` |
+| `SERVER_PORT` | 8080 | 바인딩 포트 |
+| `RUST_LOG` | info | tracing 레벨 |
+| `DISCORD_WEBHOOK_URL` | 없음 | 미설정 또는 예시값이면 알림 생략 |
+| `UPLOAD_DIR` | ./uploads | 첨부파일 저장 경로 |
+| `MAX_UPLOAD_MB` | 100 | 첨부 업로드 본문 한도 |
+| `SESSION_TTL_DAYS` | 30 | 세션 쿠키 만료 |
+| `APP_BASE_URL` | http://localhost:5173 | Discord 알림 링크의 기준 URL |
 
 ### Frontend (`frontend/`)
 ```bash
@@ -71,56 +87,97 @@ npm run lint              # eslint .
 ```
 api/src/
 ├── main.rs          # 부트스트랩만 담당. 비즈니스 로직 작성 금지
-├── routes/          # 도메인별 라우터 (posts.rs, comments.rs, users.rs ...)
-├── handlers/        # axum 핸들러. 요청 파싱 → 서비스 호출 → 응답 변환
-├── services/        # 비즈니스 로직 (첨부파일 해싱, Discord 알림 등)
-├── models/          # DB row 구조체 (sqlx::FromRow) 및 요청/응답 DTO (serde)
-└── error.rs         # 공통 에러 타입 → IntoResponse 구현
+├── config.rs        # .env → Config 구조체. 환경 변수는 여기서만 읽는다
+├── state.rs         # AppState { pool, config, http }. 모든 핸들러가 State<AppState> 로 받음
+├── error.rs         # AppError → { "error": msg } + 상태 코드. sqlx/io/multipart 에러 From 변환 포함
+├── extract.rs       # CurrentUser(로그인 필수, 401) / MaybeUser(선택) 추출기
+├── routes/          # 도메인별 Router<AppState> (auth, users, posts, comments, attachments, tags)
+├── handlers/        # axum 핸들러. 요청 파싱 → 서비스 호출 → 응답 변환. DB 쿼리 작성 금지
+├── services/        # 비즈니스 로직 + DB 접근 (검증, 트랜잭션, 첨부파일 해시 검증, Discord 알림)
+└── models/          # DB row 구조체 (sqlx::FromRow) 및 요청/응답 DTO (serde, camelCase)
 ```
-- 라우터는 도메인별 파일에서 `Router<PgPool>`을 반환하고 `main.rs`에서 `.merge()` 또는 `.nest("/api/...")` 로 합친다.
-- 핸들러는 `State<PgPool>`로 커넥션 풀을 받는다. 전역 static 사용 금지.
+- 새 도메인을 추가할 때는 `models/ → services/ → handlers/ → routes/` 순서로 파일을 만들고 `routes/mod.rs` 에서 `.merge()` 한다.
+- 인증이 필요한 핸들러는 인자로 `CurrentUser(user)` 를 받는다. 미들웨어로 경로별 인증을 걸지 않는다.
+- 소유권 검사(작성자만 수정/삭제)는 서비스 계층에서 `AppError::Forbidden` 으로 처리한다.
+- 쿼리는 `sqlx::query_as` 런타임 API 를 사용한다. `query!` 매크로는 컴파일 시 DB 연결이 필요하므로 사용하지 않는다.
+- 동적 WHERE 는 `sqlx::QueryBuilder` + `push_bind` 로 만든다. 문자열 포맷으로 값을 넣지 않는다.
 
 ### Frontend 모듈 구성
 ```
 frontend/src/
 ├── main.tsx
-├── App.tsx          # 라우팅과 레이아웃만 담당
+├── App.tsx          # BrowserRouter + Layout. 라우팅만 담당
+├── types.ts         # API 응답 타입. 백엔드 DTO 와 필드명(camelCase) 일치
 ├── index.css        # 테마 변수 (색상 추가는 여기서만)
-├── components/      # 재사용 UI (Header, PostList, PostItem, CommentList, MarkdownViewer ...)
-├── pages/           # 화면 단위 (Home, PostDetail, PostWrite, MyPage)
-├── api/             # fetch 래퍼. 컴포넌트에서 fetch 직접 호출 금지
-└── types/           # API 응답 타입 (백엔드 DTO와 필드명 일치)
+├── components/      # Header, SearchBar, PostCard, Markdown, Layout ...
+├── pages/           # HomePage, PostDetailPage, WritePage, MyPage
+├── utils/           # searchQuery (tag:/user: 파싱), hashFile (첨부파일 해시)
+└── api/             # fetch 래퍼 (도메인별 파일). 컴포넌트에서 fetch 직접 호출 금지
 ```
+- 검색창 입력은 `parseSearchQuery` → `toPostListParams` 로 `tag`(쉼표 연결), `user`, `q`(공백 연결) 쿼리 파라미터를 만들어 API 에 넘긴다. 클라이언트에서 필터링하지 않는다.
+- 첨부파일은 `buildHashedRelease` 로 얻은 `hashedName`, `sentAt` 을 파일과 함께 multipart 로 보낸다. 서버가 같은 방식으로 재계산해 검증하므로 값을 임의로 바꾸면 400 이 난다.
+- 인증은 쿠키 기반이라 same-origin 프록시 환경에서는 `fetch` 에 별도 설정이 필요 없다. 401 응답이면 로그인 화면으로 보낸다.
 
 ### DB 스키마
 | 테이블 | 마이그레이션 | 용도 | 주요 컬럼 |
 |---|---|---|---|
-| `users` | `20260913000000_init.sql` | 작성자 | `user_name` (UNIQUE, 헤더 필터 키) |
-| `posts` | `20260913000000_init.sql` | 게시물 | `title`, `summary`, `content` (GFM 원문), `created_at` |
-| `tags` / `post_tags` | `20260913000000_init.sql` | 태그 (N:M) | `name` (UNIQUE) |
-| `comments` | `20260913000000_init.sql` | 댓글 | `post_id`, `user_id`, `content` |
-| `post_attachments` | `20260913000001_add_post_attachments.sql` | 게시물에 첨부한 릴리즈 파일 (zip, exe 등) | `post_id`, `original_name`, `hashed_name` (SHA-256(`sent_at`+원본 파일명), UNIQUE, 다운로드 참조 키), `size_bytes`, `sent_at` |
+| `users` | `..000000_init`, `..20260914000000` | 사용자 | `nickname` (UNIQUE), `password_hash` (argon2), `avatar_url`, `bio` |
+| `sessions` | `20260914000000_add_auth_stars_profile.sql` | 로그인 세션 | `token` (PK, 64 hex), `user_id`, `expires_at` |
+| `posts` | `20260913000000_init.sql` | 게시물 | `title`, `summary` (excerpt), `content` (GFM 원문), `created_at`, `updated_at` |
+| `tags` / `post_tags` | `20260913000000_init.sql` | 태그 (N:M) | `name` (UNIQUE, 소문자 정규화) |
+| `comments` | `20260913000000_init.sql` | 댓글 | `post_id`, `user_id`, `content`, `updated_at` |
+| `post_stars` | `20260914000000_add_auth_stars_profile.sql` | 별 | PK(`post_id`, `user_id`) |
+| `post_attachments` | `20260913000001_add_post_attachments.sql` | 첨부 릴리즈 파일 | `post_id`, `original_name`, `hashed_name` (UNIQUE, 디스크 파일명), `size_bytes`, `sent_at` |
 
-- 스키마 변경은 기존 파일을 수정하지 말고 **새 마이그레이션 파일을 추가**한다. 이미 적용된 마이그레이션은 절대 수정하지 않는다.
+- 스키마 변경은 기존 파일을 수정하지 말고 **새 마이그레이션 파일을 추가**한다. 이미 적용된 마이그레이션은 절대 수정하지 않는다. (수정하면 서버 기동 시 체크섬 불일치로 실패하며, 이미 적용한 팀원은 DB 를 지우고 다시 만들어야 한다.)
 - 파일명은 `YYYYMMDDHHMMSS_설명.sql` 형식 (타임스탬프 순서로 실행됨).
-- `post_attachments.hashed_name`은 프론트엔드가 `crypto.subtle.digest('SHA-256', sentAt:originalName)`로 계산한 값과 확장자를 합친 문자열이다. 서버/DB는 이 해시값만으로 파일을 저장·다운로드하며, 사용자에게 보여줄 이름은 `original_name`에서 가져온다.
+- `post_attachments.hashed_name` 은 프론트엔드가 `SHA-256("{sentAt}:{originalName}")` + 확장자로 계산한 값이다. 서버는 업로드 시 같은 값을 재계산해 다르면 거부하고, 디스크에는 이 이름으로만 저장한다. 다운로드 시 `Content-Disposition` 에 `original_name` 을 넣어 준다.
 
 ### API 규약
 - 모든 엔드포인트는 `/api` prefix. 리소스 복수형 명사 사용 (`/api/posts`, `/api/posts/{id}/comments`).
-- 요청/응답 JSON 필드는 `snake_case`. 프론트 타입도 동일하게 맞춘다.
-- 목록 조회는 `?tag=`, `?user_name=`, `?q=` 쿼리 파라미터로 필터·검색을 받는다.
-- 에러 응답 형식: `{ "error": "<메시지>" }` + 적절한 HTTP 상태 코드.
+- 요청/응답 JSON 필드는 **camelCase** (프론트엔드 `types.ts` 기준). Rust DTO 는 `#[serde(rename_all = "camelCase")]`, DB 컬럼은 snake_case 유지.
+- 날짜는 RFC 3339 문자열 (`createdAt`, `updatedAt`). 첨부파일 `sentAt` 만 밀리초 epoch 숫자 (JS `Date.now()` 와 동일).
+- `id` 는 숫자(i64). 프론트 `Post.id: string` 은 연동 시 `number` 로 바꾼다.
+- 목록은 `{ items, page, limit, total }` 페이지 형태. `page` 는 1부터, `limit` 기본 20·최대 100.
+- 목록 항목(`PostSummary`)에는 `content` 가 없고 상세(`PostDetail`)에만 있다. 상세에는 `attachments` 배열이 포함된다.
+- 검색: `?tag=react,frontend` (모두 포함, 부분 일치) · `?user=닉네임` (부분 일치) · `?q=단어1 단어2` (제목·요약·닉네임·태그 중 모두 포함).
+- 인증 필요 요청에 세션이 없으면 401, 남의 리소스를 수정하면 403, 없는 리소스는 404, 닉네임/해시 중복은 409.
+- 에러 응답 형식: `{ "error": "<메시지>" }` + HTTP 상태 코드. 메시지는 사용자에게 그대로 보여줄 수 있는 한국어.
+- 요청/응답 예시는 [docs/api.md](docs/api.md) 참고. 엔드포인트를 추가·변경하면 그 문서도 함께 갱신한다.
+
+### 엔드포인트 요약
+| 메서드 | 경로 | 인증 | 설명 |
+|---|---|---|---|
+| POST | `/api/auth/register` | – | 회원가입 (닉네임 2~20자, 비밀번호 8자+ 특수문자 포함) → 세션 쿠키 발급 |
+| POST | `/api/auth/login` | – | 로그인 → 세션 쿠키 발급 |
+| POST | `/api/auth/logout` | 필요 | 세션 삭제 |
+| GET | `/api/auth/me` | 필요 | 현재 사용자 프로필 |
+| GET / PATCH | `/api/users/me` | 필요 | 마이페이지 프로필 조회 / 수정 (`nickname`, `avatarUrl`, `bio`) |
+| PUT | `/api/users/me/password` | 필요 | 비밀번호 변경 (다른 세션 전부 만료) |
+| GET | `/api/users/me/posts` | 필요 | 내가 쓴 게시물 (검색 파라미터 동일) |
+| GET | `/api/users/{nickname}` | – | 공개 프로필 |
+| GET | `/api/users/{nickname}/posts` | – | 특정 사용자의 게시물 |
+| GET | `/api/posts` | 선택 | 최신순 목록 + 검색/필터/페이지 |
+| POST | `/api/posts` | 필요 | 게시물 작성 → Discord 알림 |
+| GET | `/api/posts/{id}` | 선택 | 상세 (content, attachments, starred 포함) |
+| PATCH / DELETE | `/api/posts/{id}` | 작성자 | 수정 (`tags` 는 전체 교체) / 삭제 (첨부파일도 삭제) |
+| PUT / DELETE | `/api/posts/{id}/star` | 필요 | 별 추가 / 해제 → `{ starred, starCount }` |
+| GET / POST | `/api/posts/{id}/comments` | – / 필요 | 댓글 목록 (오래된 순) / 작성 |
+| PATCH / DELETE | `/api/comments/{id}` | 작성자 / 작성자·글쓴이 | 댓글 수정 / 삭제 |
+| GET / POST | `/api/posts/{id}/attachments` | – / 작성자 | 첨부 목록 / 업로드 (multipart: `file`, `hashedName`, `sentAt`) |
+| GET / DELETE | `/api/attachments/{hashedName}` | – / 작성자 | 다운로드 (원본 파일명) / 삭제 |
+| GET | `/api/tags` | – | 사용 중인 태그와 게시물 수 |
 
 ## 기능 명세
 
 ### Header
-- 검색창 (게시물 제목·본문 검색)
-- 필터: `tag`, `user_name`
-- 마이페이지: 자신이 올린 게시물 목록 확인
+- 검색창: `tag:react user:yangmin 자유텍스트` 형식. `tag:`/`user:` 접두어는 필터, 나머지는 제목·요약·닉네임·태그 검색
+- 마이페이지(`/me`): 프로필(닉네임, 아바타, 소개) 조회·수정, 내가 올린 게시물 목록, 비밀번호 변경
 
 ### Main
-- 최신 게시물 순(`created_at DESC`)으로 표시
-- 게시물별 댓글
+- 최신 게시물 순(`created_at DESC`)으로 표시. 카드에 작성자, 날짜, 태그, 별 수, 댓글 수
+- 게시물별 댓글 (작성·수정·삭제). 삭제는 댓글 작성자 또는 게시물 작성자
+- 별(star): 로그인 사용자당 게시물 하나에 한 번
 
 ### 게시물 (Post)
 - 프로젝트 / 학습 정리 문서 업로드
@@ -141,6 +198,9 @@ frontend/src/
 - **코드 작성이 끝나면 마지막에 반드시 `cargo fmt` 를 실행**한다. 포맷 규칙은 `api/rustfmt.toml`을 따른다.
 - `cargo check`가 통과하는 상태로 커밋한다.
 - 라우트는 `/api/...` prefix를 사용한다.
+- 사용자 입력 검증(길이, 형식)은 서비스 계층 진입부에서 하고 `AppError::BadRequest` 로 돌려준다. DB 제약에만 의존하지 않는다.
+- 비밀번호 해시 등 CPU 작업은 `tokio::task::spawn_blocking` 으로 감싼다.
+- 비밀번호 규칙은 백엔드 `services/auth.rs::validate_password` 와 프론트 `utils/password.ts` 두 곳에 있다. 바꿀 때 둘 다 수정한다.
 - DB 접근은 sqlx를 사용하고, 쿼리는 PostgreSQL 문법(`$1, $2` 바인딩)으로 작성한다.
 - 환경 변수는 `dotenvy` + `std::env`로 읽는다. 새 변수를 추가하면 `api/.env.example`에 설명과 함께 반드시 추가한다.
 - 에러는 `expect`/`unwrap`으로 패닉시키지 말고 핸들러에서는 적절한 HTTP 상태 코드로 변환한다. (초기화 단계인 `main.rs`의 `expect`는 예외)

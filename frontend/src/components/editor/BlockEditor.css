@@ -118,3 +118,25 @@
   opacity: 0;
   pointer-events: none;
 }
+
+.block-editor__content .tiptap-mathematics-render--editable {
+  border-radius: 4px;
+  padding: 0 2px;
+}
+
+.block-editor__content .inline-math-error {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  color: #f85149;
+  background-color: rgba(248, 81, 73, 0.15);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.block-editor__content div[data-type='block-math'] {
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 6px;
+  background-color: var(--color-canvas-subtle);
+  overflow-x: auto;
+}

@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import SearchBar from './SearchBar'
 import logo from '../asset/logo.png'
+import type { UserProfile } from '../types'
 import './Header.css'
 
 interface HeaderProps {
   query: string
   onQueryChange: (value: string) => void
+  user: UserProfile | null
 }
 
-function Header({ query, onQueryChange }: HeaderProps) {
+function Header({ query, onQueryChange, user }: HeaderProps) {
   const [searchHidden, setSearchHidden] = useState(false)
   const lastScrollY = useRef(0)
   const navigate = useNavigate()
@@ -40,17 +42,29 @@ function Header({ query, onQueryChange }: HeaderProps) {
             <img className="site-header__logo-image" src={logo} alt="destory" />
           </a>
           <div className="site-header__side site-header__side--right">
-            <button
-              type="button"
-              className="site-header__profile"
-              aria-label="마이페이지로 이동"
-              onClick={() => navigate('/me')}
-            >
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                <circle cx="12" cy="8" r="4" fill="currentColor" />
-                <path fill="currentColor" d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8v1H4z" />
-              </svg>
-            </button>
+            {user ? (
+              <button
+                type="button"
+                className="site-header__profile"
+                aria-label="마이페이지로 이동"
+                title={user.nickname}
+                onClick={() => navigate('/me')}
+              >
+                {user.avatarUrl ? (
+                  <img className="site-header__avatar" src={user.avatarUrl} alt="" />
+                ) : (
+                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                    <circle cx="12" cy="8" r="4" fill="currentColor" />
+                    <path fill="currentColor" d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8v1H4z" />
+                  </svg>
+                )}
+                <span className="site-header__nickname">{user.nickname}</span>
+              </button>
+            ) : (
+              <Link className="site-header__login" to="/login">
+                로그인
+              </Link>
+            )}
           </div>
         </header>
         <div className="site-header__search-band">

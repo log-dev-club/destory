@@ -1,4 +1,5 @@
 import type { Editor, Range } from '@tiptap/core'
+import { fileToCompressedDataUrl } from '../../utils/imageFile'
 
 export interface SlashCommandItem {
   title: string
@@ -109,33 +110,68 @@ const ITEMS: SlashCommandItem[] = [
     },
   },
   {
+    title: '인라인 수식',
+    description: 'LaTeX 수식 ($$수식$$ 으로 직접 입력도 가능)',
+    icon: '∑',
+    keywords: ['math', 'latex', 'formula', 'inline', '수식', '공식'],
+    command: ({ editor, range }) => {
+      const latex = window.prompt('LaTeX 수식을 입력하세요', 'x^2 + y^2 = z^2')
+      if (!latex) {
+        editor.chain().focus().deleteRange(range).run()
+        return
+      }
+      editor.chain().focus().deleteRange(range).insertInlineMath({ latex }).run()
+    },
+  },
+  {
+    title: '블록 수식',
+    description: '독립된 줄로 표시되는 LaTeX 수식',
+    icon: '∫',
+    keywords: ['math', 'latex', 'formula', 'block', '수식', '공식', '블록'],
+    command: ({ editor, range }) => {
+      const latex = window.prompt('LaTeX 수식을 입력하세요', '\\int_0^\\infty e^{-x}\\,dx = 1')
+      if (!latex) {
+        editor.chain().focus().deleteRange(range).run()
+        return
+      }
+      // insertBlockMath 커맨드는 내부적으로 insertContentAt 을 쓰는데, tiptap-markdown 이 그 커맨드를
+      // "마크다운 문자열 파싱" 용으로 덮어써서 노드 삽입과 충돌한다. insertContent 로 직접 넣어 우회한다.
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({ type: 'blockMath', attrs: { latex } })
+        .run()
+    },
+  },
+  {
     title: '이미지',
     description: '내 컴퓨터에서 이미지 파일 선택',
     icon: '🖼',
     keywords: ['image', 'img', '이미지', '그림', '사진'],
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).run()
-      pickImageFile((dataUrl, file) => {
-        editor.chain().focus().setImage({ src: dataUrl, alt: file.name }).run()
+      pickImageFile((file) => {
+        fileToCompressedDataUrl(file)
+          .then((dataUrl) => {
+            editor.chain().focus().setImage({ src: dataUrl, alt: file.name }).run()
+          })
+          .catch(() => {
+            window.alert('이미지를 불러오지 못했습니다')
+          })
       })
     },
   },
 ]
 
-function pickImageFile(onLoaded: (dataUrl: string, file: File) => void) {
+function pickImageFile(onSelected: (file: File) => void) {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/*'
   input.style.display = 'none'
   input.addEventListener('change', () => {
     const file = input.files?.[0]
-    if (file) {
-      const reader = new FileReader()
-      reader.onload = () => {
-        if (typeof reader.result === 'string') onLoaded(reader.result, file)
-      }
-      reader.readAsDataURL(file)
-    }
+    if (file) onSelected(file)
     input.remove()
   })
   document.body.appendChild(input)

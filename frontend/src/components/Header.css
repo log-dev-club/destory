@@ -81,3 +81,35 @@
 .site-header-spacer {
   height: 132px;
 }
+
+.site-header__nickname {
+  margin-left: 6px;
+  font-size: 13px;
+}
+
+.site-header__avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.site-header__login {
+  font-size: 13px;
+  color: var(--color-header-text);
+  border: 1px solid var(--color-header-border);
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+.site-header__login:hover {
+  text-decoration: none;
+  background-color: var(--color-neutral-muted);
+}
+
+/* 닉네임을 함께 표시하므로 고정 폭 해제 */
+.site-header__profile {
+  width: auto;
+  padding: 0 8px;
+  border-radius: 16px;
+}
