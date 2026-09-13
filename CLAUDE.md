@@ -197,7 +197,7 @@ frontend/src/
   - 작성 화면은 에디터 + 미리보기(preview) 형태 권장
 - 릴리즈 파일(zip, exe 등) 첨부 시 **전송 시각 + 원본 파일명을 해싱한 값**을 파일명으로 하여 서버/DB에 전달 (`post_attachments.hashed_name`)
   - DB는 해싱된 이름만으로 파일을 저장·다운로드하고, 사용자에게 보여줄 원본 파일명은 `original_name`에 별도로 보관
-- 업로드 시 **Discord로 제목 + 간략 설명 전송** (Webhook)
+- 업로드 시 **Discord로 제목 + 간략 설명 전송** (Webhook). 본문의 첫 이미지(공개 http(s) URL 만)를 썸네일로, 작성자 아바타를 아이콘으로 포함
   - Discord 전송 실패가 게시물 저장 자체를 실패시키면 안 됨 (로그만 남기고 진행)
   - Webhook URL은 `.env`의 `DISCORD_WEBHOOK_URL`에서 읽음 (하드코딩 금지)
 

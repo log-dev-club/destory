@@ -60,6 +60,7 @@ interface Attachment {
 
 interface UserProfile {
   id: number; nickname: string; avatarUrl?: string; bio?: string
+  githubLogin?: string   // GitHub 로 가입/연동한 경우에만 존재
   createdAt: string
   postCount: number      // 작성한 게시물 수
   starCount: number      // 작성한 게시물이 받은 별 합계
@@ -164,7 +165,7 @@ interface TagCount { name: string; postCount: number }
 ```
 - `title` 1~200자, `content` 필수. `excerpt` 생략 시 본문 앞 150자에서 자동 생성 (최대 300자).
 - `tags` 는 소문자 정규화, 선행 `#` 제거, 중복 제거, 최대 10개·각 50자.
-- 201 + `PostDetail`. 저장 후 Discord Webhook 으로 제목·요약·링크를 보낸다 (실패해도 응답에는 영향 없음).
+- 201 + `PostDetail`. 저장 후 Discord Webhook 으로 제목·요약·링크·태그를 embed 로 보낸다 (실패해도 응답에는 영향 없음). 본문의 첫 번째 마크다운 이미지(`![alt](https://...)`, 공개 URL 만)가 썸네일로, 작성자 아바타가 아이콘으로 붙는다.
 
 ### GET /api/posts/{id}
 - 200 + `PostDetail`. 없으면 404.
