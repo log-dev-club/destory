@@ -15,7 +15,7 @@
 # --- Rust (Backend) ---
 **/target/
 **/*.rs.bk
-Cargo.lock
+# Cargo.lock 은 커밋한다 (실행 프로그램은 의존성 버전 고정이 Rust 공식 권장. Docker 빌드도 이 파일을 사용)
 
 # --- Node.js (Frontend) ---
 **/node_modules/
@@ -30,3 +30,6 @@ Cargo.lock
 *.dylib
 # --- Uploaded files (Backend) ---
 api/uploads/
+
+# --- Docker ---
+# 루트 .env 는 docker compose 용 (이미 **/.env 로 무시됨)

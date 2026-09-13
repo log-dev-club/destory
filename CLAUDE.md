@@ -15,6 +15,7 @@
 destory/
 ├── api/                    # Rust 백엔드 (axum + sqlx + tokio)
 │   ├── src/                # 모듈 구성은 아래 "Backend 모듈 구성" 참고
+│   ├── Dockerfile          # 릴리즈 빌드 → 경량 런타임 이미지
 │   ├── migrations/         # sqlx 마이그레이션 SQL (파일명: YYYYMMDDHHMMSS_설명.sql)
 │   ├── uploads/            # 첨부파일 저장소 (gitignore, UPLOAD_DIR 로 변경 가능)
 │   ├── Cargo.toml
@@ -26,8 +27,13 @@ destory/
 │   ├── src/types.ts        # API 응답 타입 (백엔드 DTO 와 필드명 일치)
 │   ├── src/api/            # fetch 래퍼 (도메인별)
 │   ├── vite.config.ts      # /api → http://127.0.0.1:8080 프록시
+│   ├── Dockerfile          # Vite 빌드 → Caddy 이미지 (정적 서빙 + /api 프록시 + HTTPS)
+│   ├── Caddyfile
 │   └── eslint.config.js
 ├── docs/api.md             # REST API 상세 명세 (요청/응답 예시)
+├── docs/deploy.md          # Docker 배포 절차
+├── docker-compose.yml      # db + api + web(Caddy) 전체 스택
+├── .env.example            # docker compose 용 환경 변수 템플릿 (로컬 개발은 api/.env)
 ├── .gitignore
 └── CLAUDE.md
 ```
@@ -69,6 +75,8 @@ cargo clippy              # 린트
 | `GITHUB_REDIRECT_URL` | {APP_BASE_URL}/api/auth/github/callback | OAuth App 의 callback URL 과 동일해야 함 |
 | `AUTH_RATE_LIMIT_PER_MINUTE` | 10 | 로그인·회원가입·GitHub 시작의 IP 당 분당 요청 한도 |
 | `TRUST_PROXY_HEADERS` | false | 리버스 프록시 뒤에서만 true. X-Forwarded-For 의 IP 를 신뢰 |
+| `SERVER_HOST` | 127.0.0.1 | 바인딩 주소. Docker 에서는 0.0.0.0 |
+| `COOKIE_SECURE` | false | HTTPS 배포에서 true. 세션 쿠키 Secure 속성 |
 
 ### Frontend (`frontend/`)
 ```bash
@@ -78,6 +86,24 @@ npm run dev               # Vite 개발 서버
 npm run build             # tsc -b && vite build
 npm run lint              # eslint .
 ```
+
+### `git pull` 이후 체크리스트
+받아온 변경에 따라 아래를 수행한다. 실행 중인 서버는 새 의존성·마이그레이션을 자동으로 인식하지 못한다.
+
+| 바뀐 파일 | 해야 할 것 |
+|---|---|
+| `frontend/package.json` | `npm install` 후 **`npm run dev` 재시작** (Vite 는 기동 시점의 패키지 목록을 캐시하므로 재시작 없이는 `Failed to resolve import` 오류가 남) |
+| `api/Cargo.toml` | `cargo build` 후 서버 재시작 |
+| `api/migrations/*.sql` | 서버 재시작 (기동 시 자동 적용). 기존 파일이 수정된 경우에만 DB 재생성 |
+| `api/.env.example` | 새 키를 본인 `.env` 에 추가 (대부분 비워도 기본값으로 동작) |
+
+### 배포 (Docker)
+```bash
+cp .env.example .env      # POSTGRES_PASSWORD, SITE_ADDRESS, APP_BASE_URL 채우기
+docker compose up -d --build
+docker compose logs -f api
+```
+클라우드 VM 이든 개인 PC 든 동일. 상세 절차와 주소 설정은 [docs/deploy.md](docs/deploy.md).
 
 ## 아키텍처
 

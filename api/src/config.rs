@@ -28,6 +28,10 @@ pub struct Config {
     /// true 면 X-Forwarded-For / X-Real-IP 헤더의 IP 를 클라이언트 IP 로 신뢰한다.
     /// 리버스 프록시(nginx, Caddy) 뒤에 있을 때만 켠다. 직접 노출된 서버에서 켜면 헤더 위조로 제한을 우회할 수 있다.
     pub trust_proxy_headers: bool,
+    /// 바인딩 주소. 로컬은 127.0.0.1, Docker 컨테이너 안에서는 0.0.0.0 이어야 외부(프록시)에서 접근 가능
+    pub server_host: String,
+    /// true 면 세션 쿠키에 Secure 속성을 붙여 HTTPS 에서만 전송되게 한다. HTTPS 배포 시 반드시 켠다
+    pub cookie_secure: bool,
 }
 
 fn non_empty(key: &str) -> Option<String> {
@@ -35,6 +39,12 @@ fn non_empty(key: &str) -> Option<String> {
         .ok()
         .map(|v| v.trim().to_string())
         .filter(|v| !v.is_empty())
+}
+
+fn env_bool(key: &str, default: bool) -> bool {
+    env::var(key)
+        .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
+        .unwrap_or(default)
 }
 
 impl Config {
@@ -88,9 +98,9 @@ impl Config {
             .filter(|v| *v > 0)
             .unwrap_or(10);
 
-        let trust_proxy_headers = env::var("TRUST_PROXY_HEADERS")
-            .map(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes"))
-            .unwrap_or(false);
+        let trust_proxy_headers = env_bool("TRUST_PROXY_HEADERS", false);
+        let server_host = non_empty("SERVER_HOST").unwrap_or_else(|| "127.0.0.1".into());
+        let cookie_secure = env_bool("COOKIE_SECURE", false);
 
         Self {
             database_url,
@@ -103,6 +113,8 @@ impl Config {
             github,
             auth_rate_limit_per_minute,
             trust_proxy_headers,
+            server_host,
+            cookie_secure,
         }
     }
 }

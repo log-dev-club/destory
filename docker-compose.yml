@@ -1,0 +1,64 @@
+# destory 전체 스택: PostgreSQL + 백엔드(axum) + 프론트/프록시(Caddy)
+# 사용법: .env.example 을 .env 로 복사해 채운 뒤  docker compose up -d --build
+# 클라우드 VM 이든 개인 PC 든 Docker 만 있으면 같은 명령으로 동작한다.
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: destory
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD 를 .env 에 설정하세요}
+      POSTGRES_DB: destory
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U destory -d destory"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://destory:${POSTGRES_PASSWORD}@db:5432/destory
+      RUST_LOG: ${RUST_LOG:-api=info}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      AUTH_RATE_LIMIT_PER_MINUTE: ${AUTH_RATE_LIMIT_PER_MINUTE:-10}
+      # Caddy 뒤에 있으므로 프록시 헤더를 신뢰하고, HTTPS 일 때만 Secure 쿠키
+      TRUST_PROXY_HEADERS: "true"
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      GITHUB_REDIRECT_URL: ${GITHUB_REDIRECT_URL:-}
+    volumes:
+      - uploads:/app/uploads
+    # 백엔드는 외부에 직접 열지 않는다. web(Caddy) 컨테이너만 접근
+
+  web:
+    build: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy-data:/data      # 인증서 보관 (재시작해도 재발급 안 함)
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  uploads:
+  caddy-data:
+  caddy-config:
