@@ -104,6 +104,7 @@ function WritePage() {
   const handleFilesSelected = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
     setIsHashing(true)
+    setError(null)
     try {
       const newAttachments = await Promise.all(
         Array.from(fileList).map(async (file) => ({
@@ -112,6 +113,8 @@ function WritePage() {
         })),
       )
       setAttachments((prev) => [...prev, ...newAttachments])
+    } catch {
+      setError('첨부파일 처리에 실패했습니다')
     } finally {
       setIsHashing(false)
     }
