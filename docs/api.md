@@ -268,10 +268,12 @@ form.append('file', file)
 const { url } = await fetch('/api/images', { method: 'POST', body: form }).then((r) => r.json())
 // url 을 그대로 마크다운에 삽입: ![alt](${url})
 ```
-- 응답 `url` 은 `APP_BASE_URL` 기준 **절대 URL** (`{APP_BASE_URL}/api/images/{storedName}`). 상대 경로가 아닌
-  이유: Discord 웹훅이 본문 첫 이미지를 썸네일로 가져올 때 외부에서 접근 가능한 절대 URL이어야 하기 때문
-  (`services/discord.rs::is_public_image_url`). 마크다운에는 이 URL을 그대로 써야 하며, base64 데이터 URI로
-  넣으면 Discord 썸네일이 표시되지 않는다.
+- 응답 `url` 은 **상대 경로** (`/api/images/{storedName}`). 절대 URL로 고정해서 저장하지 않는 이유:
+  도메인이 나중에 바뀌면(IP → 커스텀 도메인 등) 이미 저장된 게시물에 박힌 절대 URL이 깨지기 때문.
+  마크다운에는 이 상대 경로를 그대로 삽입한다 (base64 데이터 URI로 넣으면 Discord 썸네일이 표시되지 않는다).
+  Discord 웹훅처럼 외부에서 접근 가능한 절대 URL이 필요한 곳(썸네일)은, 알림을 보내는 시점에 그때그때
+  현재 `APP_BASE_URL` 로 변환한다 (`services/discord.rs::resolve_image_url`) — 업로드 시점이 아니라
+  전송 시점 기준이라 도메인이 바뀐 뒤에도 예전 게시물의 썸네일이 계속 정상 동작한다.
 - 201 + `{ url }`. 지원하지 않는 확장자 400. 크기 초과 413.
 
 ### GET /api/images/{storedName}

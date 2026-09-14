@@ -69,7 +69,10 @@ pub async fn upload(
     }
     created?;
 
-    let url = format!("{}/api/images/{}", state.config.app_base_url, stored_name);
+    // 상대 경로로 저장해야 도메인이 바뀌어도(예: IP → 커스텀 도메인) 예전 게시물의 이미지가 깨지지 않는다.
+    // 외부에 절대 URL이 필요한 경우(Discord 썸네일)는 그때그때 현재 APP_BASE_URL 로 변환한다
+    // (services::discord::resolve_image_url 참고).
+    let url = format!("/api/images/{stored_name}");
     Ok((StatusCode::CREATED, Json(UploadedImageDto { url })))
 }
 
