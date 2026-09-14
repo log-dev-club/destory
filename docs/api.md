@@ -252,6 +252,31 @@ await fetch(`/api/posts/${postId}/attachments`, { method: 'POST', body: form })
 ### DELETE /api/attachments/{hashedName}
 - 게시물 작성자만. DB 행과 디스크 파일 삭제. 204.
 
+## 본문 이미지
+
+### POST /api/images
+`multipart/form-data`, 로그인 필요. 게시물 본문(마크다운)에 삽입할 이미지를 업로드한다.
+릴리즈 첨부파일과 달리 게시물이 저장되기 전(작성 중)에도 올릴 수 있어 `postId` 를 받지 않는다.
+
+| 필드 | 값 |
+|---|---|
+| `file` | 이미지 파일 (filename 필수, png/jpg/jpeg/gif/webp 만 허용) |
+
+```ts
+const form = new FormData()
+form.append('file', file)
+const { url } = await fetch('/api/images', { method: 'POST', body: form }).then((r) => r.json())
+// url 을 그대로 마크다운에 삽입: ![alt](${url})
+```
+- 응답 `url` 은 `APP_BASE_URL` 기준 **절대 URL** (`{APP_BASE_URL}/api/images/{storedName}`). 상대 경로가 아닌
+  이유: Discord 웹훅이 본문 첫 이미지를 썸네일로 가져올 때 외부에서 접근 가능한 절대 URL이어야 하기 때문
+  (`services/discord.rs::is_public_image_url`). 마크다운에는 이 URL을 그대로 써야 하며, base64 데이터 URI로
+  넣으면 Discord 썸네일이 표시되지 않는다.
+- 201 + `{ url }`. 지원하지 않는 확장자 400. 크기 초과 413.
+
+### GET /api/images/{storedName}
+- 공개, 인증 불필요. 이미지 스트림 (`Cache-Control: public, max-age=31536000, immutable`).
+
 ## 태그
 
 ### GET /api/tags
