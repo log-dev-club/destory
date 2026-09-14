@@ -52,6 +52,11 @@ export interface Attachment {
   createdAt: string
 }
 
+/** POST /api/images 응답. url 을 그대로 마크다운 이미지 문법에 삽입 */
+export interface UploadedImage {
+  url: string
+}
+
 export interface UserProfile {
   id: number
   nickname: string

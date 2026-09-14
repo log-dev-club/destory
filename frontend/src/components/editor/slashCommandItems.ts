@@ -1,5 +1,6 @@
 import type { Editor, Range } from '@tiptap/core'
-import { fileToCompressedDataUrl } from '../../utils/imageFile'
+import { uploadImage } from '../../api/images'
+import { fileToCompressedFile } from '../../utils/imageFile'
 import { promptText } from '../../utils/textPrompt'
 
 export interface SlashCommandItem {
@@ -148,19 +149,20 @@ const ITEMS: SlashCommandItem[] = [
     command: ({ editor, range }) => {
       editor.chain().focus().deleteRange(range).run()
       pickImageFile((file) => {
-        fileToCompressedDataUrl(file)
-          .then((dataUrl) => {
+        fileToCompressedFile(file)
+          .then((compressed) => uploadImage(compressed))
+          .then(({ url }) => {
             // setImage 만 실행하면 삽입 직후 선택이 이미지 자체(NodeSelection)에 남아서,
             // 사용자가 곧바로 이어서 타이핑하면 그 입력이 이미지를 통째로 지우고 대체해버린다.
             // 이미지 뒤에 빈 문단을 함께 넣어 커서가 텍스트 위치(그 문단 안)에 놓이게 한다.
             editor
               .chain()
               .focus()
-              .insertContent([{ type: 'image', attrs: { src: dataUrl, alt: file.name } }, { type: 'paragraph' }])
+              .insertContent([{ type: 'image', attrs: { src: url, alt: file.name } }, { type: 'paragraph' }])
               .run()
           })
           .catch(() => {
-            window.alert('이미지를 불러오지 못했습니다')
+            window.alert('이미지를 업로드하지 못했습니다')
           })
       })
     },

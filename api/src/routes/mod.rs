@@ -7,6 +7,7 @@ use crate::state::AppState;
 pub mod attachments;
 pub mod auth;
 pub mod comments;
+pub mod images;
 pub mod posts;
 pub mod tags;
 pub mod users;
@@ -21,6 +22,7 @@ pub fn router(state: AppState) -> Router {
         .merge(posts::router())
         .merge(comments::router())
         .merge(attachments::router(max_upload_bytes))
+        .merge(images::router(max_upload_bytes))
         .merge(tags::router())
         .with_state(state)
 }

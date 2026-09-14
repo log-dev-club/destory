@@ -6,6 +6,7 @@ pub mod comments;
 pub mod discord;
 pub mod drafts;
 pub mod github;
+pub mod images;
 pub mod posts;
 pub mod tags;
 pub mod users;
