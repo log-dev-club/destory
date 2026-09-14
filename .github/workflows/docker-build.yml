@@ -1,0 +1,50 @@
+name: Docker 이미지 빌드/푸시
+
+# 서버(오라클 클라우드 1GB RAM)에서 직접 빌드하면 Rust 컴파일 중 메모리 부족으로 멈추므로,
+# GitHub Actions 러너에서 빌드해 GHCR(GitHub Container Registry)에 올려두고
+# 서버는 docker compose pull 로 완성된 이미지만 받아 쓰게 한다.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "frontend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/docker-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: ./api
+          - name: web
+            context: ./frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/${{ github.repository }}-${{ matrix.name }}:latest
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
