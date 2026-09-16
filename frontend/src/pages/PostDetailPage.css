@@ -54,7 +54,14 @@
 .post-detail__stats {
   margin-left: auto;
   display: flex;
+  align-items: center;
   gap: 12px;
+}
+
+.post-detail__comment-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .post-detail__body {
@@ -62,6 +69,7 @@
 }
 
 .post-detail__star,
+.post-detail__edit,
 .post-detail__delete {
   background: none;
   border: 1px solid var(--color-border-default);
@@ -70,11 +78,17 @@
   color: var(--color-fg-muted);
   font-size: 13px;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .post-detail__star.is-active {
   color: #e3b341;
   border-color: #e3b341;
+}
+
+.post-detail__edit:hover {
+  color: var(--color-accent-fg);
+  border-color: var(--color-accent-fg);
 }
 
 .post-detail__delete:hover {

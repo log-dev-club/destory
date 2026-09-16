@@ -40,6 +40,8 @@ pub struct PostSummary {
     pub comment_count: i64,
     pub star_count: i64,
     pub starred: bool,
+    /// 본문에 마크다운 이미지(`![...](...)`)가 하나라도 있는지. 홈 목록의 이미지 아이콘 표시용
+    pub has_image: bool,
 }
 
 /// 상세 응답. 프론트엔드 `Post` 타입 + attachments
@@ -54,6 +56,7 @@ pub struct PostDetail {
 
 impl PostRow {
     pub fn into_summary(self) -> PostSummary {
+        let has_image = self.content.contains("![");
         PostSummary {
             id: self.id,
             title: self.title,
@@ -68,6 +71,7 @@ impl PostRow {
             comment_count: self.comment_count,
             star_count: self.star_count,
             starred: self.starred,
+            has_image,
         }
     }
 

@@ -34,6 +34,7 @@ interface PostSummary {
   commentCount: number
   starCount: number
   starred: boolean       // 요청자가 별을 눌렀는지 (비로그인 false)
+  hasImage: boolean      // 본문에 마크다운 이미지가 하나라도 있는지 (목록 아이콘 표시용)
 }
 
 interface PostDetail extends PostSummary {
@@ -293,8 +294,8 @@ const { url } = await fetch('/api/images', { method: 'POST', body: form }).then(
 | Layout / Header | `GET /api/auth/me` (세션 확인, 닉네임 표시) |
 | LoginPage | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/providers`, GitHub 버튼 → `/api/auth/github` (비밀번호 확인·규칙은 클라이언트에서 선검사) |
 | HomePage | `GET /api/posts` (검색창 → `tag`/`user`/`q`, 250ms 디바운스) |
-| PostDetailPage | `GET /api/posts/{id}`, 댓글 목록/작성/삭제, 별 토글, 게시물 삭제, 첨부 다운로드 |
-| WritePage | `POST /api/posts` → 첨부파일마다 `POST /api/posts/{id}/attachments`, 임시저장은 `GET`/`PUT`/`DELETE /api/users/me/draft` |
+| PostDetailPage | `GET /api/posts/{id}`, 댓글 목록/작성/삭제, 별 토글, 게시물 삭제, 첨부 다운로드, 작성자에게 `/posts/{id}/edit` 수정 링크 노출 |
+| WritePage (`/write`, `/posts/{id}/edit`) | `POST /api/posts` 또는 `PATCH /api/posts/{id}` → 첨부파일마다 `POST /api/posts/{id}/attachments`, 기존 첨부 삭제는 `DELETE /api/attachments/{hashedName}`. 임시저장(`GET`/`PUT`/`DELETE /api/users/me/draft`)은 새 글 작성 모드에서만 동작 |
 | MyPage | `GET /api/users/me/posts`, `PATCH /api/users/me`, `POST /api/auth/logout` |
 
-아직 UI 가 없는 API: 댓글 수정, 게시물 수정, 비밀번호 변경, 다른 사용자 프로필/게시물, 태그 목록.
+아직 UI 가 없는 API: 댓글 수정, 비밀번호 변경, 다른 사용자 프로필/게시물, 태그 목록.

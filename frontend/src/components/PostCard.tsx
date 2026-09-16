@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import type { PostSummary } from '../types'
 import { formatDate } from '../utils/formatDate'
+import { CommentIcon, ImageIcon } from './icons'
 import './PostCard.css'
 
 interface PostCardProps {
@@ -11,6 +12,7 @@ function PostCard({ post }: PostCardProps) {
   return (
     <article className="post-card">
       <h3 className="post-card__title">
+        {post.hasImage && <ImageIcon className="post-card__image-icon" />}
         <Link to={`/posts/${post.id}`}>{post.title}</Link>
       </h3>
       <p className="post-card__excerpt">{post.excerpt}</p>
@@ -29,7 +31,9 @@ function PostCard({ post }: PostCardProps) {
         </div>
         <div className="post-card__stats">
           <span>{post.starred ? '★' : '☆'} {post.starCount}</span>
-          <span>💬 {post.commentCount}</span>
+          <span className="post-card__comment-count">
+            <CommentIcon /> {post.commentCount}
+          </span>
         </div>
       </div>
     </article>
