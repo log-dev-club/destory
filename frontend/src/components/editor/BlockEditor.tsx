@@ -35,9 +35,14 @@ export interface BlockEditorHandle {
 
 interface BlockEditorProps {
   onChange?: (markdown: string) => void
+  /** 최초 마운트 시에만 사용되는 초기 마크다운 (게시물 수정 화면 프리필용). 이후 변경은 반영되지 않는다 */
+  initialContent?: string
 }
 
-const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function BlockEditor({ onChange }, ref) {
+const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function BlockEditor(
+  { onChange, initialContent },
+  ref,
+) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -62,7 +67,7 @@ const BlockEditor = forwardRef<BlockEditorHandle, BlockEditorProps>(function Blo
       GlobalDragHandle.configure({ dragHandleWidth: 24 }),
       SlashCommand,
     ],
-    content: '',
+    content: initialContent ?? '',
     editorProps: {
       attributes: {
         class: 'tiptap block-editor__content markdown-body',

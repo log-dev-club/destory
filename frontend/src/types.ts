@@ -17,6 +17,7 @@ export interface PostSummary {
   commentCount: number
   starCount: number
   starred: boolean
+  hasImage: boolean
 }
 
 /** 상세 (GET /api/posts/{id}) */

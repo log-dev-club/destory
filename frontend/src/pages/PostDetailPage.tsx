@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import Markdown from '../components/Markdown'
+import { CommentIcon } from '../components/icons'
 import type { LayoutContext } from '../components/Layout'
 import { deletePost, fetchPost, starPost, unstarPost } from '../api/posts'
 import { createComment, deleteComment, fetchComments } from '../api/comments'
@@ -145,11 +146,18 @@ function PostDetailPage() {
           >
             {post.starred ? '★' : '☆'} {post.starCount}
           </button>
-          <span>💬 {post.commentCount}</span>
+          <span className="post-detail__comment-count">
+            <CommentIcon /> {post.commentCount}
+          </span>
           {isOwner && (
-            <button type="button" className="post-detail__delete" onClick={removePost}>
-              삭제
-            </button>
+            <>
+              <Link to={`/posts/${post.id}/edit`} className="post-detail__edit">
+                수정
+              </Link>
+              <button type="button" className="post-detail__delete" onClick={removePost}>
+                삭제
+              </button>
+            </>
           )}
         </div>
       </div>

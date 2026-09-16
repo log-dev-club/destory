@@ -6,6 +6,14 @@
 .post-card__title {
   margin: 0 0 6px;
   font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.post-card__image-icon {
+  flex: none;
+  color: var(--color-fg-muted);
 }
 
 .post-card__title a {
@@ -49,4 +57,10 @@
   margin-left: auto;
   display: flex;
   gap: 12px;
+}
+
+.post-card__comment-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
