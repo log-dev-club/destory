@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
-import { useNavigate, useOutletContext } from 'react-router-dom'
+import type { FormEvent, KeyboardEvent } from 'react'
+import { useLocation, useNavigate, useOutletContext, useParams } from 'react-router-dom'
 import BlockEditor from '../components/editor/BlockEditor'
 import type { BlockEditorHandle } from '../components/editor/BlockEditor'
 import type { LayoutContext } from '../components/Layout'
-import { createPost } from '../api/posts'
-import { uploadAttachment } from '../api/attachments'
+import { createPost, fetchPost, updatePost } from '../api/posts'
+import { deleteAttachment, uploadAttachment } from '../api/attachments'
 import { deleteDraft, fetchDraft, saveDraft } from '../api/drafts'
 import type { Draft } from '../api/drafts'
 import { ApiError } from '../api/client'
 import { buildHashedRelease } from '../utils/hashFile'
 import type { HashedRelease } from '../utils/hashFile'
+import type { Attachment } from '../types'
 import './WritePage.css'
 
 interface AttachedFile {
@@ -24,6 +25,11 @@ function formatSavedAt(iso: string) {
   return new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 }
 
+// 제목/태그 입력창에서 Enter 로 폼이 바로 제출되는 것을 막는다
+function preventEnterSubmit(event: KeyboardEvent<HTMLInputElement>) {
+  if (event.key === 'Enter') event.preventDefault()
+}
+
 function isDraftEmpty(draft: Pick<Draft, 'title' | 'tagsInput' | 'content'>) {
   return !draft.title.trim() && !draft.tagsInput.trim() && !draft.content.trim()
 }
@@ -31,27 +37,63 @@ function isDraftEmpty(draft: Pick<Draft, 'title' | 'tagsInput' | 'content'>) {
 function WritePage() {
   const { user } = useOutletContext<LayoutContext>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const { id } = useParams<{ id: string }>()
+  const postId = id ? Number(id) : null
+  const isEdit = postId !== null && Number.isInteger(postId)
 
   const [title, setTitle] = useState('')
   const [tagsInput, setTagsInput] = useState('')
   const [content, setContent] = useState('')
+  const [initialContent, setInitialContent] = useState('')
   const [attachments, setAttachments] = useState<AttachedFile[]>([])
+  const [existingAttachments, setExistingAttachments] = useState<Attachment[]>([])
   const [isHashing, setIsHashing] = useState(false)
   const [draftBanner, setDraftBanner] = useState<Draft | null>(null)
   const [draftChecked, setDraftChecked] = useState(false)
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadingPost, setLoadingPost] = useState(isEdit)
+  const [loadFailed, setLoadFailed] = useState(false)
   const editorRef = useRef<BlockEditorHandle>(null)
 
   // 비로그인이면 로그인 후 이 페이지로 돌아오도록
   useEffect(() => {
-    if (user === null) navigate('/login', { replace: true, state: { from: '/write' } })
-  }, [user, navigate])
+    if (user === null) navigate('/login', { replace: true, state: { from: location.pathname } })
+  }, [user, navigate, location.pathname])
 
-  // 로그인 확인되면 서버에 저장된 임시저장이 있는지 확인
+  // 수정 모드: 기존 게시물을 불러와 폼을 채운다. 작성자가 아니면 상세 화면으로 돌려보낸다
   useEffect(() => {
-    if (!user) return
+    if (!isEdit || !user || postId === null) return
+    let cancelled = false
+    fetchPost(postId)
+      .then((loaded) => {
+        if (cancelled) return
+        if (loaded.author.nickname !== user.nickname) {
+          navigate(`/posts/${postId}`, { replace: true })
+          return
+        }
+        setTitle(loaded.title)
+        setTagsInput(loaded.tags.join(', '))
+        setContent(loaded.content)
+        setInitialContent(loaded.content)
+        setExistingAttachments(loaded.attachments)
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true)
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingPost(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isEdit, postId, user, navigate])
+
+  // 로그인 확인되면 서버에 저장된 임시저장이 있는지 확인 (새 글 작성 모드에서만)
+  useEffect(() => {
+    if (!user || isEdit) return
     let cancelled = false
     fetchDraft()
       .then((draft) => {
@@ -64,11 +106,11 @@ function WritePage() {
     return () => {
       cancelled = true
     }
-  }, [user])
+  }, [user, isEdit])
 
-  // 자동 임시저장 (디바운스). 복원 배너가 떠 있는 동안엔 덮어쓰지 않는다
+  // 자동 임시저장 (디바운스, 새 글 작성 모드에서만). 복원 배너가 떠 있는 동안엔 덮어쓰지 않는다
   useEffect(() => {
-    if (!user || !draftChecked || draftBanner) return
+    if (!user || isEdit || !draftChecked || draftBanner) return
     if (!title.trim() && !tagsInput.trim() && !content.trim()) return
 
     const timer = window.setTimeout(() => {
@@ -78,7 +120,7 @@ function WritePage() {
     }, AUTOSAVE_DELAY_MS)
 
     return () => window.clearTimeout(timer)
-  }, [user, title, tagsInput, content, draftChecked, draftBanner])
+  }, [user, isEdit, title, tagsInput, content, draftChecked, draftBanner])
 
   const handleRestoreDraft = () => {
     if (!draftBanner) return
@@ -104,6 +146,7 @@ function WritePage() {
   const handleFilesSelected = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
     setIsHashing(true)
+    setError(null)
     try {
       const newAttachments = await Promise.all(
         Array.from(fileList).map(async (file) => ({
@@ -112,6 +155,8 @@ function WritePage() {
         })),
       )
       setAttachments((prev) => [...prev, ...newAttachments])
+    } catch {
+      setError('첨부파일 처리에 실패했습니다')
     } finally {
       setIsHashing(false)
     }
@@ -121,10 +166,19 @@ function WritePage() {
     setAttachments((prev) => prev.filter((item) => item.hashed.hashedName !== hashedName))
   }
 
+  const removeExistingAttachment = async (hashedName: string) => {
+    if (!window.confirm('첨부파일을 삭제할까요?')) return
+    try {
+      await deleteAttachment(hashedName)
+      setExistingAttachments((prev) => prev.filter((item) => item.hashedName !== hashedName))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : '첨부파일 삭제에 실패했습니다')
+    }
+  }
+
   /**
-   * 1) POST /api/posts 로 게시물 저장 (서버가 Discord 알림 전송)
-   * 2) 응답 id 로 첨부파일을 하나씩 업로드
-   * 3) 임시저장 삭제 후 상세 화면으로 이동
+   * 새 글: 1) POST /api/posts 로 저장 (서버가 Discord 알림 전송) 2) 첨부파일 업로드 3) 임시저장 삭제
+   * 수정: 1) PATCH /api/posts/{id} 로 저장 2) 새로 추가된 첨부파일만 업로드
    */
   const handleSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -139,7 +193,7 @@ function WritePage() {
     setSubmitting(true)
     setError(null)
     try {
-      const post = await createPost({ title, content, tags })
+      const post = isEdit && postId !== null ? await updatePost(postId, { title, content, tags }) : await createPost({ title, content, tags })
 
       const failed: string[] = []
       for (const { file, hashed } of attachments) {
@@ -153,7 +207,7 @@ function WritePage() {
         window.alert(`게시물은 저장되었지만 일부 첨부파일 업로드에 실패했습니다.\n${failed.join('\n')}`)
       }
 
-      await deleteDraft().catch(() => {})
+      if (!isEdit) await deleteDraft().catch(() => {})
       navigate(`/posts/${post.id}`)
     } catch (err) {
       setError(err instanceof ApiError ? err.message : '게시물 저장에 실패했습니다')
@@ -164,6 +218,22 @@ function WritePage() {
 
   // 로그인 확인 전이거나 비로그인으로 리다이렉트되는 중에는 그리지 않는다
   if (!user) return null
+
+  if (isEdit && loadFailed) {
+    return (
+      <div className="write-page">
+        <p className="write-form__error">게시물을 찾을 수 없습니다.</p>
+      </div>
+    )
+  }
+
+  if (isEdit && loadingPost) {
+    return (
+      <div className="write-page">
+        <p>불러오는 중...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="write-page">
@@ -187,6 +257,7 @@ function WritePage() {
           type="text"
           value={title}
           onChange={(event) => setTitle(event.target.value)}
+          onKeyDown={preventEnterSubmit}
           placeholder="제목을 입력하세요"
           required
         />
@@ -196,11 +267,12 @@ function WritePage() {
           type="text"
           value={tagsInput}
           onChange={(event) => setTagsInput(event.target.value)}
+          onKeyDown={preventEnterSubmit}
           placeholder="태그 추가 (쉼표로 구분, 예: react, frontend)"
         />
 
         <div className="write-form__editor">
-          <BlockEditor ref={editorRef} onChange={setContent} />
+          <BlockEditor ref={editorRef} onChange={setContent} initialContent={initialContent} />
         </div>
 
         <div className="write-form__attachments">
@@ -209,6 +281,22 @@ function WritePage() {
             <input type="file" multiple onChange={(event) => handleFilesSelected(event.target.files)} />
           </label>
           {isHashing && <p className="write-form__hint">파일 이름을 해싱하는 중...</p>}
+
+          {existingAttachments.length > 0 && (
+            <ul className="attachment-list">
+              {existingAttachments.map((attachment) => (
+                <li key={attachment.id} className="attachment-list__item">
+                  <div className="attachment-list__info">
+                    <span className="attachment-list__name">{attachment.originalName}</span>
+                    <span className="attachment-list__hash">→ {attachment.hashedName}</span>
+                  </div>
+                  <button type="button" onClick={() => removeExistingAttachment(attachment.hashedName)}>
+                    제거
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
 
           {attachments.length > 0 && (
             <ul className="attachment-list">
@@ -235,12 +323,16 @@ function WritePage() {
             className="write-form__submit"
             disabled={submitting || isHashing || !title.trim() || !content.trim()}
           >
-            {submitting ? '게시 중...' : '게시하기'}
+            {isEdit ? (submitting ? '수정 중...' : '수정하기') : submitting ? '게시 중...' : '게시하기'}
           </button>
-          <button type="button" className="write-form__draft-save" onClick={handleSaveDraft} disabled={submitting}>
-            임시저장
-          </button>
-          {lastSavedAt && <span className="write-form__saved-at">{formatSavedAt(lastSavedAt)}에 저장됨</span>}
+          {!isEdit && (
+            <button type="button" className="write-form__draft-save" onClick={handleSaveDraft} disabled={submitting}>
+              임시저장
+            </button>
+          )}
+          {!isEdit && lastSavedAt && (
+            <span className="write-form__saved-at">{formatSavedAt(lastSavedAt)}에 저장됨</span>
+          )}
         </div>
       </form>
     </div>

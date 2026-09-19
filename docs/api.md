@@ -34,6 +34,7 @@ interface PostSummary {
   commentCount: number
   starCount: number
   starred: boolean       // 요청자가 별을 눌렀는지 (비로그인 false)
+  hasImage: boolean      // 본문에 마크다운 이미지가 하나라도 있는지 (목록 아이콘 표시용)
 }
 
 interface PostDetail extends PostSummary {
@@ -61,12 +62,22 @@ interface Attachment {
 interface UserProfile {
   id: number; nickname: string; avatarUrl?: string; bio?: string
   githubLogin?: string   // GitHub 로 가입/연동한 경우에만 존재
+  role: 'user' | 'admin' | 'super_admin'
   createdAt: string
   postCount: number      // 작성한 게시물 수
   starCount: number      // 작성한 게시물이 받은 별 합계
 }
 
 interface TagCount { name: string; postCount: number }
+
+interface AdminUserSummary {
+  id: number; nickname: string; avatarUrl?: string
+  role: 'user' | 'admin' | 'super_admin'
+  createdAt: string
+  postCount: number
+}
+
+interface AdminUserPage { items: AdminUserSummary[]; page: number; limit: number; total: number }
 ```
 
 ## 인증
@@ -152,6 +163,20 @@ interface Draft { title: string; content: string; tagsInput: string; updatedAt: 
 ### GET /api/users/{nickname}/posts
 - 200 + `PostPage`.
 
+## 관리자
+
+`role` 이 `admin` 또는 `super_admin` 인 계정만 호출 가능 (아니면 403). 최고 관리자(`super_admin`) 계정은 서버 최초 기동 시 닉네임 `admin` 으로 자동 생성되며, 무작위 비밀번호가 서버 로그에 한 번만 출력된다. `super_admin` 은 게시물·댓글을 작성자와 무관하게 삭제할 수 있고 (`DELETE /api/posts/{id}`, `DELETE /api/comments/{id}` 참고), 다른 계정에 `admin` 권한을 부여/해제할 수 있다.
+
+### GET /api/admin/users?q=&page=&limit=
+- 관리자/최고 관리자. `q` 는 닉네임 부분 일치(선택). 200 + `AdminUserPage`.
+
+### PUT /api/admin/users/{nickname}/role
+```json
+{ "role": "admin" }
+```
+- 최고 관리자만. `role` 은 `user` 또는 `admin` (이 API 로 `super_admin` 을 만들 수 없음).
+- 자기 자신이나 다른 최고 관리자의 역할은 바꿀 수 없음 (400). 200 + `UserProfile`.
+
 ## 게시물
 
 ### GET /api/posts
@@ -192,7 +217,7 @@ interface Draft { title: string; content: string; tagsInput: string; updatedAt: 
 - 작성자만. 생략한 필드는 유지, `tags` 를 보내면 전체 교체. 200 + `PostDetail`.
 
 ### DELETE /api/posts/{id}
-- 작성자만. 댓글·별·첨부파일(디스크 포함) 함께 삭제. 204.
+- 작성자 또는 관리자. 댓글·별·첨부파일(디스크 포함) 함께 삭제. 204.
 
 ### PUT /api/posts/{id}/star · DELETE /api/posts/{id}/star
 - 로그인 필요. 멱등(두 번 눌러도 같은 결과).
@@ -218,7 +243,7 @@ interface Draft { title: string; content: string; tagsInput: string; updatedAt: 
 - 댓글 작성자만. 200 + `Comment`.
 
 ### DELETE /api/comments/{id}
-- 댓글 작성자 또는 게시물 작성자. 204.
+- 댓글 작성자·게시물 작성자 또는 관리자. 204.
 
 ## 첨부파일
 
@@ -252,6 +277,33 @@ await fetch(`/api/posts/${postId}/attachments`, { method: 'POST', body: form })
 ### DELETE /api/attachments/{hashedName}
 - 게시물 작성자만. DB 행과 디스크 파일 삭제. 204.
 
+## 본문 이미지
+
+### POST /api/images
+`multipart/form-data`, 로그인 필요. 게시물 본문(마크다운)에 삽입할 이미지를 업로드한다.
+릴리즈 첨부파일과 달리 게시물이 저장되기 전(작성 중)에도 올릴 수 있어 `postId` 를 받지 않는다.
+
+| 필드 | 값 |
+|---|---|
+| `file` | 이미지 파일 (filename 필수, png/jpg/jpeg/gif/webp 만 허용) |
+
+```ts
+const form = new FormData()
+form.append('file', file)
+const { url } = await fetch('/api/images', { method: 'POST', body: form }).then((r) => r.json())
+// url 을 그대로 마크다운에 삽입: ![alt](${url})
+```
+- 응답 `url` 은 **상대 경로** (`/api/images/{storedName}`). 절대 URL로 고정해서 저장하지 않는 이유:
+  도메인이 나중에 바뀌면(IP → 커스텀 도메인 등) 이미 저장된 게시물에 박힌 절대 URL이 깨지기 때문.
+  마크다운에는 이 상대 경로를 그대로 삽입한다 (base64 데이터 URI로 넣으면 Discord 썸네일이 표시되지 않는다).
+  Discord 웹훅처럼 외부에서 접근 가능한 절대 URL이 필요한 곳(썸네일)은, 알림을 보내는 시점에 그때그때
+  현재 `APP_BASE_URL` 로 변환한다 (`services/discord.rs::resolve_image_url`) — 업로드 시점이 아니라
+  전송 시점 기준이라 도메인이 바뀐 뒤에도 예전 게시물의 썸네일이 계속 정상 동작한다.
+- 201 + `{ url }`. 지원하지 않는 확장자 400. 크기 초과 413.
+
+### GET /api/images/{storedName}
+- 공개, 인증 불필요. 이미지 스트림 (`Cache-Control: public, max-age=31536000, immutable`).
+
 ## 태그
 
 ### GET /api/tags
@@ -266,8 +318,8 @@ await fetch(`/api/posts/${postId}/attachments`, { method: 'POST', body: form })
 | Layout / Header | `GET /api/auth/me` (세션 확인, 닉네임 표시) |
 | LoginPage | `POST /api/auth/register`, `POST /api/auth/login`, `GET /api/auth/providers`, GitHub 버튼 → `/api/auth/github` (비밀번호 확인·규칙은 클라이언트에서 선검사) |
 | HomePage | `GET /api/posts` (검색창 → `tag`/`user`/`q`, 250ms 디바운스) |
-| PostDetailPage | `GET /api/posts/{id}`, 댓글 목록/작성/삭제, 별 토글, 게시물 삭제, 첨부 다운로드 |
-| WritePage | `POST /api/posts` → 첨부파일마다 `POST /api/posts/{id}/attachments`, 임시저장은 `GET`/`PUT`/`DELETE /api/users/me/draft` |
+| PostDetailPage | `GET /api/posts/{id}`, 댓글 목록/작성/삭제, 별 토글, 게시물 삭제, 첨부 다운로드, 작성자에게 `/posts/{id}/edit` 수정 링크 노출 |
+| WritePage (`/write`, `/posts/{id}/edit`) | `POST /api/posts` 또는 `PATCH /api/posts/{id}` → 첨부파일마다 `POST /api/posts/{id}/attachments`, 기존 첨부 삭제는 `DELETE /api/attachments/{hashedName}`. 임시저장(`GET`/`PUT`/`DELETE /api/users/me/draft`)은 새 글 작성 모드에서만 동작 |
 | MyPage | `GET /api/users/me/posts`, `PATCH /api/users/me`, `POST /api/auth/logout` |
 
-아직 UI 가 없는 API: 댓글 수정, 게시물 수정, 비밀번호 변경, 다른 사용자 프로필/게시물, 태그 목록.
+아직 UI 가 없는 API: 댓글 수정, 비밀번호 변경, 다른 사용자 프로필/게시물, 태그 목록.

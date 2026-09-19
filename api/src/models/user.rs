@@ -13,8 +13,22 @@ pub struct UserRow {
     pub bio: Option<String>,
     pub github_id: Option<i64>,
     pub github_login: Option<String>,
+    /// `user` / `admin` / `super_admin`
+    pub role: String,
     pub created_at: OffsetDateTime,
     pub updated_at: OffsetDateTime,
+}
+
+impl UserRow {
+    /// 관리자 또는 최고 관리자인지 (게시물·댓글을 작성자와 무관하게 삭제할 수 있음)
+    pub fn is_admin(&self) -> bool {
+        self.role == "admin" || self.role == "super_admin"
+    }
+
+    /// 최고 관리자인지 (다른 계정에 관리자 권한을 부여/해제할 수 있음)
+    pub fn is_super_admin(&self) -> bool {
+        self.role == "super_admin"
+    }
 }
 
 /// 프론트엔드 `Author` 타입과 1:1
@@ -39,6 +53,8 @@ pub struct UserProfile {
     /// GitHub 로 가입/연동한 경우 GitHub 로그인명
     #[serde(skip_serializing_if = "Option::is_none")]
     pub github_login: Option<String>,
+    /// `user` / `admin` / `super_admin`
+    pub role: String,
     #[serde(with = "time::serde::rfc3339")]
     pub created_at: OffsetDateTime,
     /// 작성한 게시물 수

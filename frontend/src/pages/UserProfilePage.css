@@ -1,0 +1,112 @@
+.user-profile {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.user-profile--empty {
+  text-align: center;
+  color: var(--color-fg-muted);
+  padding: 80px 16px;
+}
+
+.user-profile__header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-bottom: 20px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+
+.user-profile__avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background-color: var(--color-canvas-subtle);
+  border: 1px solid var(--color-border-default);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-fg-muted);
+  flex-shrink: 0;
+}
+
+.user-profile__text {
+  flex: 1;
+}
+
+.user-profile__text h1 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-profile__role {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border-default);
+  color: var(--color-fg-muted);
+}
+
+.user-profile__role--admin {
+  color: var(--color-accent-fg);
+  border-color: var(--color-accent-fg);
+}
+
+.user-profile__role--super_admin {
+  color: #e3b341;
+  border-color: #e3b341;
+}
+
+.user-profile__stats {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: 13px;
+}
+
+.user-profile__bio {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--color-fg-default);
+}
+
+.user-profile__actions button {
+  border: 1px solid var(--color-border-default);
+  background-color: var(--color-canvas-default);
+  color: var(--color-fg-default);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.user-profile__actions button:hover {
+  background-color: var(--color-neutral-muted);
+}
+
+.user-profile__error {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #f85149;
+}
+
+.user-profile__section-title {
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.user-profile__empty {
+  color: var(--color-fg-muted);
+  padding: 24px 0;
+}
+
+.user-profile__list {
+  display: flex;
+  flex-direction: column;
+}

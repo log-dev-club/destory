@@ -5,7 +5,8 @@ import PostCard from '../components/PostCard'
 import type { LayoutContext } from '../components/Layout'
 import { logout } from '../api/auth'
 import { fetchMyPosts } from '../api/posts'
-import { updateMyProfile } from '../api/users'
+import { changePassword, updateMyProfile } from '../api/users'
+import { PASSWORD_MIN_LENGTH, hasSpecialChar, validatePassword } from '../utils/password'
 import type { PostPage } from '../types'
 import './MyPage.css'
 
@@ -20,6 +21,14 @@ function MyPage() {
   const [bio, setBio] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  const [changingPassword, setChangingPassword] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordChanged, setPasswordChanged] = useState(false)
 
   // 비로그인이면 로그인 화면으로
   useEffect(() => {
@@ -61,6 +70,41 @@ function MyPage() {
       setError(err instanceof Error ? err.message : '저장에 실패했습니다')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const startChangingPassword = () => {
+    setCurrentPassword('')
+    setNewPassword('')
+    setNewPasswordConfirm('')
+    setPasswordError(null)
+    setPasswordChanged(false)
+    setChangingPassword(true)
+  }
+
+  const submitPasswordChange = async (event: FormEvent) => {
+    event.preventDefault()
+    setPasswordError(null)
+
+    const message = validatePassword(newPassword)
+    if (message) {
+      setPasswordError(message)
+      return
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setPasswordError('새 비밀번호가 일치하지 않습니다')
+      return
+    }
+
+    setPasswordSaving(true)
+    try {
+      await changePassword(currentPassword, newPassword)
+      setChangingPassword(false)
+      setPasswordChanged(true)
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : '비밀번호 변경에 실패했습니다')
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
@@ -113,6 +157,9 @@ function MyPage() {
           <button type="button" onClick={startEditing}>
             프로필 수정
           </button>
+          <button type="button" onClick={startChangingPassword}>
+            비밀번호 변경
+          </button>
           <button type="button" onClick={handleLogout}>
             로그아웃
           </button>
@@ -144,6 +191,70 @@ function MyPage() {
               저장
             </button>
             <button type="button" onClick={() => setEditing(false)}>
+              취소
+            </button>
+          </div>
+        </form>
+      )}
+
+      {!changingPassword && passwordChanged && (
+        <p className="my-page__notice">비밀번호가 변경되었습니다.</p>
+      )}
+
+      {changingPassword && (
+        <form className="profile-form" onSubmit={submitPasswordChange}>
+          <label className="profile-form__field">
+            <span>현재 비밀번호</span>
+            <input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+              required
+            />
+          </label>
+          <label className="profile-form__field">
+            <span>새 비밀번호</span>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+              placeholder="8자 이상, 특수문자 포함"
+              required
+            />
+          </label>
+          <ul className="password-rules" aria-live="polite">
+            <li className={[...newPassword].length >= PASSWORD_MIN_LENGTH ? 'is-ok' : ''}>
+              {PASSWORD_MIN_LENGTH}자 이상
+            </li>
+            <li className={hasSpecialChar(newPassword) ? 'is-ok' : ''}>
+              특수문자(!@#$%^&* 등) 1개 이상
+            </li>
+            <li
+              className={
+                newPasswordConfirm.length > 0 && newPassword === newPasswordConfirm ? 'is-ok' : ''
+              }
+            >
+              새 비밀번호 확인 일치
+            </li>
+          </ul>
+          <label className="profile-form__field">
+            <span>새 비밀번호 확인</span>
+            <input
+              type="password"
+              value={newPasswordConfirm}
+              onChange={(e) => setNewPasswordConfirm(e.target.value)}
+              autoComplete="new-password"
+              required
+            />
+          </label>
+          {passwordError && <p className="profile-form__error">{passwordError}</p>}
+          <div className="profile-form__buttons">
+            <button type="submit" disabled={passwordSaving}>
+              변경
+            </button>
+            <button type="button" onClick={() => setChangingPassword(false)}>
               취소
             </button>
           </div>

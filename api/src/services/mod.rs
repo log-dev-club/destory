@@ -1,11 +1,13 @@
 //! 비즈니스 로직과 DB 접근. 핸들러는 여기 함수를 호출만 한다.
 
+pub mod admin;
 pub mod attachments;
 pub mod auth;
 pub mod comments;
 pub mod discord;
 pub mod drafts;
 pub mod github;
+pub mod images;
 pub mod posts;
 pub mod tags;
 pub mod users;

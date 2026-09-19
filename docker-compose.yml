@@ -1,6 +1,10 @@
 # destory 전체 스택: PostgreSQL + 백엔드(axum) + 프론트/프록시(Caddy)
-# 사용법: .env.example 을 .env 로 복사해 채운 뒤  docker compose up -d --build
-# 클라우드 VM 이든 개인 PC 든 Docker 만 있으면 같은 명령으로 동작한다.
+#
+# - 로컬 개발:  .env.example 을 .env 로 복사해 채운 뒤  docker compose up -d --build
+# - 서버 배포:  GitHub Actions(.github/workflows/docker-build.yml)가 main 브랜치 푸시마다
+#   api/web 이미지를 빌드해 GHCR 에 올려두므로, 서버는 빌드 없이 받기만 하면 된다:
+#     docker compose pull && docker compose up -d
+#   (저사양 서버에서 Rust 를 직접 빌드하면 메모리 부족으로 멈출 수 있어 이 방식을 쓴다)
 
 services:
   db:
@@ -19,6 +23,7 @@ services:
       retries: 10
 
   api:
+    image: ghcr.io/log-dev-club/destory-api:latest
     build: ./api
     restart: unless-stopped
     depends_on:
@@ -43,6 +48,7 @@ services:
     # 백엔드는 외부에 직접 열지 않는다. web(Caddy) 컨테이너만 접근
 
   web:
+    image: ghcr.io/log-dev-club/destory-web:latest
     build: ./frontend
     restart: unless-stopped
     depends_on:

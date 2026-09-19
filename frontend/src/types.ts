@@ -17,6 +17,7 @@ export interface PostSummary {
   commentCount: number
   starCount: number
   starred: boolean
+  hasImage: boolean
 }
 
 /** 상세 (GET /api/posts/{id}) */
@@ -52,6 +53,13 @@ export interface Attachment {
   createdAt: string
 }
 
+/** POST /api/images 응답. url 을 그대로 마크다운 이미지 문법에 삽입 */
+export interface UploadedImage {
+  url: string
+}
+
+export type UserRole = 'user' | 'admin' | 'super_admin'
+
 export interface UserProfile {
   id: number
   nickname: string
@@ -59,6 +67,7 @@ export interface UserProfile {
   bio?: string
   /** GitHub 로 가입/연동한 경우 GitHub 로그인명 */
   githubLogin?: string
+  role: UserRole
   createdAt: string
   postCount: number
   starCount: number
@@ -67,4 +76,21 @@ export interface UserProfile {
 export interface TagCount {
   name: string
   postCount: number
+}
+
+/** GET /api/admin/users 목록 항목 */
+export interface AdminUserSummary {
+  id: number
+  nickname: string
+  avatarUrl?: string
+  role: UserRole
+  createdAt: string
+  postCount: number
+}
+
+export interface AdminUserPage {
+  items: AdminUserSummary[]
+  page: number
+  limit: number
+  total: number
 }

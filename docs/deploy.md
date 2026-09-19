@@ -60,20 +60,34 @@ COOKIE_SECURE=false
 
 ## 3. 실행
 
+`main` 브랜치에 푸시될 때마다 GitHub Actions(`.github/workflows/docker-build.yml`)가
+`api`/`web` 이미지를 빌드해 GHCR(`ghcr.io/log-dev-club/destory-*`)에 올려둔다.
+서버는 그 이미지를 받기만 하면 되므로, **RAM 이 적은 서버에서도 Rust 를 직접 컴파일할 필요가 없다.**
+
 ```bash
-docker compose up -d --build     # 이미지 빌드 + 백그라운드 실행
+docker compose pull              # GHCR 에서 완성된 이미지 받기
+docker compose up -d             # 백그라운드 실행 (--build 없음)
 docker compose ps                # 세 컨테이너 모두 healthy/running 인지
 docker compose logs -f api       # 백엔드 로그 (DB 생성, 마이그레이션, 기동 확인)
 ```
 
-첫 빌드는 Rust 컴파일 때문에 5~10분 걸린다. 이후에는 의존성 캐시로 빨라진다.
 백엔드가 시작하면서 DB 생성과 마이그레이션을 자동으로 처리한다.
+
+GHCR 이미지가 기본적으로 private 이면 `docker compose pull` 이 인증 오류로 실패한다.
+GitHub 저장소 → Packages → 해당 이미지 → **Package settings → Change visibility → Public** 으로 바꾸거나,
+`read:packages` 권한의 PAT 로 서버에서 한 번 `docker login ghcr.io` 를 해둔다.
+
+로컬 개발 중 소스를 직접 빌드해서 띄우고 싶으면 (GHCR 이미지 대신):
+```bash
+docker compose up -d --build
+```
 
 ## 4. 업데이트
 
 ```bash
 git pull origin main
-docker compose up -d --build     # 바뀐 이미지만 다시 빌드하고 교체
+docker compose pull              # GitHub Actions 가 새로 만든 이미지 받기
+docker compose up -d             # 바뀐 이미지로 컨테이너 교체
 ```
 
 ## 5. 데이터 위치와 백업
