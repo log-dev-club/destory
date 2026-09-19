@@ -8,9 +8,12 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 use super::{attachments, like_pattern, truncate_chars};
 use crate::{
     error::AppError,
-    models::post::{
-        CreatePostRequest, PostDetail, PostFilter, PostPage, PostRow, StarResponse,
-        UpdatePostRequest,
+    models::{
+        post::{
+            CreatePostRequest, PostDetail, PostFilter, PostPage, PostRow, StarResponse,
+            UpdatePostRequest,
+        },
+        user::UserRow,
     },
 };
 
@@ -138,6 +141,18 @@ pub async fn owner_id(pool: &PgPool, post_id: i64) -> Result<i64, AppError> {
 /// 게시물이 존재하고 요청자가 작성자인지 확인
 pub async fn ensure_owner(pool: &PgPool, post_id: i64, user_id: i64) -> Result<(), AppError> {
     if owner_id(pool, post_id).await? != user_id {
+        return Err(AppError::Forbidden);
+    }
+    Ok(())
+}
+
+/// 게시물이 존재하고 요청자가 작성자이거나 관리자인지 확인 (삭제용)
+async fn ensure_owner_or_admin(
+    pool: &PgPool,
+    post_id: i64,
+    actor: &UserRow,
+) -> Result<(), AppError> {
+    if owner_id(pool, post_id).await? != actor.id && !actor.is_admin() {
         return Err(AppError::Forbidden);
     }
     Ok(())
@@ -336,14 +351,14 @@ pub async fn update_post(
     get_post(pool, post_id, Some(user_id)).await
 }
 
-/// 게시물 삭제. DB 행은 CASCADE 로 정리되고 첨부파일은 디스크에서 별도로 지운다.
+/// 게시물 삭제. 작성자 또는 관리자만 가능. DB 행은 CASCADE 로 정리되고 첨부파일은 디스크에서 별도로 지운다.
 pub async fn delete_post(
     pool: &PgPool,
     post_id: i64,
-    user_id: i64,
+    actor: &UserRow,
     upload_dir: &std::path::Path,
 ) -> Result<(), AppError> {
-    ensure_owner(pool, post_id, user_id).await?;
+    ensure_owner_or_admin(pool, post_id, actor).await?;
 
     let hashed_names = attachments::hashed_names_for_post(pool, post_id).await?;
 

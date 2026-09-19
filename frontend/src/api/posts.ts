@@ -15,6 +15,9 @@ export const fetchPosts = (params: PostListParams = {}) =>
 export const fetchMyPosts = (params: PostListParams = {}) =>
   api<PostPage>(`/api/users/me/posts${toQuery(params)}`)
 
+export const fetchUserPosts = (nickname: string, params: PostListParams = {}) =>
+  api<PostPage>(`/api/users/${encodeURIComponent(nickname)}/posts${toQuery(params)}`)
+
 export const fetchPost = (id: number) => api<PostDetail>(`/api/posts/${id}`)
 
 export interface CreatePostBody {

@@ -45,12 +45,12 @@ pub async fn update(
     ))
 }
 
-/// DELETE /api/comments/{id} — 댓글 작성자 또는 게시물 작성자
+/// DELETE /api/comments/{id} — 댓글 작성자·게시물 작성자 또는 관리자
 pub async fn delete(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(comment_id): Path<i64>,
 ) -> Result<StatusCode, AppError> {
-    services::comments::delete(&state.pool, comment_id, user.id).await?;
+    services::comments::delete(&state.pool, comment_id, &user).await?;
     Ok(StatusCode::NO_CONTENT)
 }
