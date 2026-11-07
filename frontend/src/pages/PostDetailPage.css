@@ -216,7 +216,7 @@
   font-size: 14px;
   color: var(--color-fg-default);
   background-color: var(--color-canvas-default);
-  resize: vertical;
+  resize: none;
 }
 
 .comment-form textarea:focus {

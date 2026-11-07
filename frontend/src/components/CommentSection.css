@@ -77,7 +77,7 @@
   font-family: inherit;
   color: var(--color-fg-default);
   background-color: var(--color-canvas-default);
-  resize: vertical;
+  resize: none;
 }
 
 .comment-form__field textarea:focus {

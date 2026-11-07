@@ -82,6 +82,12 @@
   height: 132px;
 }
 
+/* 검색창이 없는 화면(게시물 상세)은 헤더 높이만큼만 차지 */
+.site-header-group.no-search,
+.site-header-spacer.no-search {
+  height: 64px;
+}
+
 .site-header__nickname {
   margin-left: 6px;
   font-size: 13px;

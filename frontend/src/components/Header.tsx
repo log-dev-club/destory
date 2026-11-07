@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import SearchBar from './SearchBar'
 import logo from '../asset/logo.png'
 import type { UserProfile } from '../types'
@@ -15,6 +15,9 @@ function Header({ query, onQueryChange, user }: HeaderProps) {
   const [searchHidden, setSearchHidden] = useState(false)
   const lastScrollY = useRef(0)
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // 게시물 상세 화면에서는 검색창을 표시하지 않는다
+  const showSearch = !matchPath('/posts/:id', pathname)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -35,7 +38,9 @@ function Header({ query, onQueryChange, user }: HeaderProps) {
 
   return (
     <>
-      <div className={`site-header-group ${searchHidden ? 'search-hidden' : ''}`}>
+      <div
+        className={`site-header-group ${searchHidden ? 'search-hidden' : ''} ${showSearch ? '' : 'no-search'}`}
+      >
         <header className="site-header">
           <div className="site-header__side" />
           <a className="site-header__logo" href="/">
@@ -74,11 +79,16 @@ function Header({ query, onQueryChange, user }: HeaderProps) {
             )}
           </div>
         </header>
-        <div className="site-header__search-band">
-          <SearchBar query={query} onQueryChange={onQueryChange} />
-        </div>
+        {showSearch && (
+          <div className="site-header__search-band">
+            <SearchBar query={query} onQueryChange={onQueryChange} />
+          </div>
+        )}
       </div>
-      <div className="site-header-spacer" aria-hidden="true" />
+      <div
+        className={`site-header-spacer ${showSearch ? '' : 'no-search'}`}
+        aria-hidden="true"
+      />
     </>
   )
 }
