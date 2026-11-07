@@ -152,7 +152,7 @@ frontend/src/
 ### DB 스키마
 | 테이블 | 마이그레이션 | 용도 | 주요 컬럼 |
 |---|---|---|---|
-| `users` | `..init`, `..20260914000000`, `..20260914100000` | 사용자 | `nickname` (UNIQUE), `password_hash` (argon2, GitHub 가입은 빈 문자열), `avatar_url`, `bio`, `github_id` (UNIQUE), `github_login` |
+| `users` | `..init`, `..20260914000000`, `..20260914100000`, `..20260918000000` | 사용자 | `nickname` (UNIQUE), `password_hash` (argon2, GitHub 가입은 빈 문자열), `avatar_url`, `bio`, `github_id` (UNIQUE), `github_login`, `role` (`user`/`admin`/`super_admin`, 기본 `user`) |
 | `sessions` | `20260914000000_add_auth_stars_profile.sql` | 로그인 세션 | `token` (PK, 64 hex), `user_id`, `expires_at` |
 | `posts` | `20260913000000_init.sql` | 게시물 | `title`, `summary` (excerpt), `content` (GFM 원문), `created_at`, `updated_at` |
 | `tags` / `post_tags` | `20260913000000_init.sql` | 태그 (N:M) | `name` (UNIQUE, 소문자 정규화) |
@@ -195,13 +195,15 @@ frontend/src/
 | GET | `/api/posts` | 선택 | 최신순 목록 + 검색/필터/페이지 |
 | POST | `/api/posts` | 필요 | 게시물 작성 → Discord 알림 |
 | GET | `/api/posts/{id}` | 선택 | 상세 (content, attachments, starred 포함) |
-| PATCH / DELETE | `/api/posts/{id}` | 작성자 | 수정 (`tags` 는 전체 교체) / 삭제 (첨부파일도 삭제) |
+| PATCH / DELETE | `/api/posts/{id}` | 작성자 / 작성자·관리자 | 수정 (`tags` 는 전체 교체) / 삭제 (첨부파일도 삭제) |
 | PUT / DELETE | `/api/posts/{id}/star` | 필요 | 별 추가 / 해제 → `{ starred, starCount }` |
 | GET / POST | `/api/posts/{id}/comments` | – / 필요 | 댓글 목록 (오래된 순) / 작성 |
-| PATCH / DELETE | `/api/comments/{id}` | 작성자 / 작성자·글쓴이 | 댓글 수정 / 삭제 |
+| PATCH / DELETE | `/api/comments/{id}` | 작성자 / 작성자·글쓴이·관리자 | 댓글 수정 / 삭제 |
 | GET / POST | `/api/posts/{id}/attachments` | – / 작성자 | 첨부 목록 / 업로드 (multipart: `file`, `hashedName`, `sentAt`) |
 | GET / DELETE | `/api/attachments/{hashedName}` | – / 작성자 | 다운로드 (원본 파일명) / 삭제 |
 | GET | `/api/tags` | – | 사용 중인 태그와 게시물 수 |
+| GET | `/api/admin/users` | 관리자 | 전체 사용자 목록 (`q` 닉네임 검색, 페이지) |
+| PUT | `/api/admin/users/{nickname}/role` | 최고 관리자 | 관리자 권한 부여/해제 (`role`: `user` \| `admin`) |
 
 ## 기능 명세
 

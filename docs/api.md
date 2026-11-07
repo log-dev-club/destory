@@ -62,12 +62,22 @@ interface Attachment {
 interface UserProfile {
   id: number; nickname: string; avatarUrl?: string; bio?: string
   githubLogin?: string   // GitHub 로 가입/연동한 경우에만 존재
+  role: 'user' | 'admin' | 'super_admin'
   createdAt: string
   postCount: number      // 작성한 게시물 수
   starCount: number      // 작성한 게시물이 받은 별 합계
 }
 
 interface TagCount { name: string; postCount: number }
+
+interface AdminUserSummary {
+  id: number; nickname: string; avatarUrl?: string
+  role: 'user' | 'admin' | 'super_admin'
+  createdAt: string
+  postCount: number
+}
+
+interface AdminUserPage { items: AdminUserSummary[]; page: number; limit: number; total: number }
 ```
 
 ## 인증
@@ -153,6 +163,20 @@ interface Draft { title: string; content: string; tagsInput: string; updatedAt: 
 ### GET /api/users/{nickname}/posts
 - 200 + `PostPage`.
 
+## 관리자
+
+`role` 이 `admin` 또는 `super_admin` 인 계정만 호출 가능 (아니면 403). 최고 관리자(`super_admin`) 계정은 서버 최초 기동 시 닉네임 `admin` 으로 자동 생성되며, 무작위 비밀번호가 서버 로그에 한 번만 출력된다. `super_admin` 은 게시물·댓글을 작성자와 무관하게 삭제할 수 있고 (`DELETE /api/posts/{id}`, `DELETE /api/comments/{id}` 참고), 다른 계정에 `admin` 권한을 부여/해제할 수 있다.
+
+### GET /api/admin/users?q=&page=&limit=
+- 관리자/최고 관리자. `q` 는 닉네임 부분 일치(선택). 200 + `AdminUserPage`.
+
+### PUT /api/admin/users/{nickname}/role
+```json
+{ "role": "admin" }
+```
+- 최고 관리자만. `role` 은 `user` 또는 `admin` (이 API 로 `super_admin` 을 만들 수 없음).
+- 자기 자신이나 다른 최고 관리자의 역할은 바꿀 수 없음 (400). 200 + `UserProfile`.
+
 ## 게시물
 
 ### GET /api/posts
@@ -193,7 +217,7 @@ interface Draft { title: string; content: string; tagsInput: string; updatedAt: 
 - 작성자만. 생략한 필드는 유지, `tags` 를 보내면 전체 교체. 200 + `PostDetail`.
 
 ### DELETE /api/posts/{id}
-- 작성자만. 댓글·별·첨부파일(디스크 포함) 함께 삭제. 204.
+- 작성자 또는 관리자. 댓글·별·첨부파일(디스크 포함) 함께 삭제. 204.
 
 ### PUT /api/posts/{id}/star · DELETE /api/posts/{id}/star
 - 로그인 필요. 멱등(두 번 눌러도 같은 결과).
@@ -219,7 +243,7 @@ interface Draft { title: string; content: string; tagsInput: string; updatedAt: 
 - 댓글 작성자만. 200 + `Comment`.
 
 ### DELETE /api/comments/{id}
-- 댓글 작성자 또는 게시물 작성자. 204.
+- 댓글 작성자·게시물 작성자 또는 관리자. 204.
 
 ## 첨부파일
 

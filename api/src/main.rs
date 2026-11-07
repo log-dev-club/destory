@@ -74,7 +74,12 @@ async fn main() {
 
     info!("Database migrations applied");
 
-    // 6. 첨부파일 디렉토리 준비
+    // 6. 최고 관리자 계정이 없으면 하나 생성 (닉네임 admin, 무작위 비밀번호를 로그에 한 번만 출력)
+    services::admin::bootstrap_super_admin(&pool)
+        .await
+        .expect("Failed to bootstrap super admin account");
+
+    // 7. 첨부파일 디렉토리 준비
     tokio::fs::create_dir_all(&config.upload_dir)
         .await
         .expect("Failed to create upload directory");
@@ -83,7 +88,7 @@ async fn main() {
         info!("DISCORD_WEBHOOK_URL 미설정: 게시물 알림을 보내지 않습니다");
     }
 
-    // 7. 라우터 설정
+    // 8. 라우터 설정
     let state = AppState {
         pool,
         config: config.clone(),
@@ -91,7 +96,7 @@ async fn main() {
     };
     let app = routes::router(state);
 
-    // 8. 서버 바인딩
+    // 9. 서버 바인딩
     // 팀원 참고: 기본은 로컬 개발용 127.0.0.1. Docker 에서는 SERVER_HOST=0.0.0.0 으로 띄운다 (docker-compose.yml 참고)
     let addr = format!("{}:{}", config.server_host, config.server_port);
     let listener = tokio::net::TcpListener::bind(&addr)

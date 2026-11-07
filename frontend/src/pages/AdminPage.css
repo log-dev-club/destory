@@ -1,0 +1,108 @@
+.admin-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 24px 16px 64px;
+}
+
+.admin-page__title {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+
+.admin-page__search {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-page__search input {
+  flex: 1;
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 13px;
+  color: var(--color-fg-default);
+  background-color: var(--color-canvas-default);
+}
+
+.admin-page__search button,
+.admin-page__pagination button,
+.admin-page__table button {
+  border: 1px solid var(--color-border-default);
+  background-color: var(--color-canvas-default);
+  color: var(--color-fg-default);
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.admin-page__search button:hover,
+.admin-page__pagination button:not(:disabled):hover,
+.admin-page__table button:hover {
+  background-color: var(--color-neutral-muted);
+}
+
+.admin-page__pagination button:disabled,
+.admin-page__table button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.admin-page__error {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: #f85149;
+}
+
+.admin-page__empty {
+  color: var(--color-fg-muted);
+  padding: 24px 0;
+}
+
+.admin-page__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.admin-page__table th,
+.admin-page__table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+
+.admin-page__table th {
+  color: var(--color-fg-muted);
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.admin-page__role {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 2px 8px;
+  border: 1px solid var(--color-border-default);
+  color: var(--color-fg-muted);
+}
+
+.admin-page__role--admin {
+  color: var(--color-accent-fg);
+  border-color: var(--color-accent-fg);
+}
+
+.admin-page__role--super_admin {
+  color: #e3b341;
+  border-color: #e3b341;
+}
+
+.admin-page__pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 13px;
+  color: var(--color-fg-muted);
+}

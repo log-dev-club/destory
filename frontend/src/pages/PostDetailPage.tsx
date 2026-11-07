@@ -44,6 +44,7 @@ function PostDetailPage() {
   }, [postId, invalidId])
 
   const isOwner = user !== null && user !== undefined && post !== null && user.nickname === post.author.nickname
+  const isAdmin = user !== null && user !== undefined && (user.role === 'admin' || user.role === 'super_admin')
 
   const toggleStar = async () => {
     if (!post) return
@@ -127,7 +128,9 @@ function PostDetailPage() {
       <h1 className="post-detail__title">{post.title}</h1>
 
       <div className="post-detail__meta">
-        <span className="post-detail__author">{post.author.nickname}</span>
+        <Link className="post-detail__author" to={`/users/${encodeURIComponent(post.author.nickname)}`}>
+          {post.author.nickname}
+        </Link>
         <span className="post-detail__dot">·</span>
         <time dateTime={post.createdAt}>{formatDate(post.createdAt)}</time>
         <div className="post-detail__tags">
@@ -150,14 +153,14 @@ function PostDetailPage() {
             <CommentIcon /> {post.commentCount}
           </span>
           {isOwner && (
-            <>
-              <Link to={`/posts/${post.id}/edit`} className="post-detail__edit">
-                수정
-              </Link>
-              <button type="button" className="post-detail__delete" onClick={removePost}>
-                삭제
-              </button>
-            </>
+            <Link to={`/posts/${post.id}/edit`} className="post-detail__edit">
+              수정
+            </Link>
+          )}
+          {(isOwner || isAdmin) && (
+            <button type="button" className="post-detail__delete" onClick={removePost}>
+              삭제
+            </button>
           )}
         </div>
       </div>
@@ -192,11 +195,15 @@ function PostDetailPage() {
         ) : (
           <ul className="comments__list">
             {comments.map((comment) => {
-              const canDelete = user ? user.nickname === comment.author.nickname || isOwner : false
+              const canDelete = user
+                ? user.nickname === comment.author.nickname || isOwner || isAdmin
+                : false
               return (
                 <li key={comment.id} className="comment">
                   <div className="comment__meta">
-                    <span className="comment__author">{comment.author.nickname}</span>
+                    <Link className="comment__author" to={`/users/${encodeURIComponent(comment.author.nickname)}`}>
+                      {comment.author.nickname}
+                    </Link>
                     <time dateTime={comment.createdAt}>{formatDateTime(comment.createdAt)}</time>
                     {comment.updatedAt !== comment.createdAt && <span>(수정됨)</span>}
                     {canDelete && (

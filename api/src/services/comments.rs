@@ -1,11 +1,14 @@
-//! 댓글 CRUD. 수정은 작성자만, 삭제는 댓글 작성자 또는 게시물 작성자.
+//! 댓글 CRUD. 수정은 작성자만, 삭제는 댓글 작성자·게시물 작성자 또는 관리자.
 
 use sqlx::PgPool;
 
 use super::posts;
 use crate::{
     error::AppError,
-    models::comment::{CommentDto, CommentRow},
+    models::{
+        comment::{CommentDto, CommentRow},
+        user::UserRow,
+    },
 };
 
 const CONTENT_MAX: usize = 2000;
@@ -100,9 +103,9 @@ pub async fn update(
     get_comment(pool, comment_id).await
 }
 
-pub async fn delete(pool: &PgPool, comment_id: i64, user_id: i64) -> Result<(), AppError> {
+pub async fn delete(pool: &PgPool, comment_id: i64, actor: &UserRow) -> Result<(), AppError> {
     let (author_id, post_owner_id) = owners(pool, comment_id).await?;
-    if author_id != user_id && post_owner_id != user_id {
+    if author_id != actor.id && post_owner_id != actor.id && !actor.is_admin() {
         return Err(AppError::Forbidden);
     }
     sqlx::query("DELETE FROM comments WHERE id = $1")

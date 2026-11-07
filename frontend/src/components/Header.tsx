@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, matchPath, useLocation, useNavigate } from 'react-router-dom'
 import SearchBar from './SearchBar'
 import logo from '../asset/logo.png'
 import type { UserProfile } from '../types'
@@ -15,6 +15,9 @@ function Header({ query, onQueryChange, user }: HeaderProps) {
   const [searchHidden, setSearchHidden] = useState(false)
   const lastScrollY = useRef(0)
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  // 게시물 상세 화면에서는 검색창을 표시하지 않는다
+  const showSearch = !matchPath('/posts/:id', pathname)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -35,7 +38,9 @@ function Header({ query, onQueryChange, user }: HeaderProps) {
 
   return (
     <>
-      <div className={`site-header-group ${searchHidden ? 'search-hidden' : ''}`}>
+      <div
+        className={`site-header-group ${searchHidden ? 'search-hidden' : ''} ${showSearch ? '' : 'no-search'}`}
+      >
         <header className="site-header">
           <div className="site-header__side" />
           <a className="site-header__logo" href="/">
@@ -43,23 +48,30 @@ function Header({ query, onQueryChange, user }: HeaderProps) {
           </a>
           <div className="site-header__side site-header__side--right">
             {user ? (
-              <button
-                type="button"
-                className="site-header__profile"
-                aria-label="마이페이지로 이동"
-                title={user.nickname}
-                onClick={() => navigate('/me')}
-              >
-                {user.avatarUrl ? (
-                  <img className="site-header__avatar" src={user.avatarUrl} alt="" />
-                ) : (
-                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
-                    <circle cx="12" cy="8" r="4" fill="currentColor" />
-                    <path fill="currentColor" d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8v1H4z" />
-                  </svg>
+              <>
+                {(user.role === 'admin' || user.role === 'super_admin') && (
+                  <Link className="site-header__admin-link" to="/admin">
+                    관리자
+                  </Link>
                 )}
-                <span className="site-header__nickname">{user.nickname}</span>
-              </button>
+                <button
+                  type="button"
+                  className="site-header__profile"
+                  aria-label="마이페이지로 이동"
+                  title={user.nickname}
+                  onClick={() => navigate('/me')}
+                >
+                  {user.avatarUrl ? (
+                    <img className="site-header__avatar" src={user.avatarUrl} alt="" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+                      <circle cx="12" cy="8" r="4" fill="currentColor" />
+                      <path fill="currentColor" d="M4 20c0-4.4 3.6-8 8-8s8 3.6 8 8v1H4z" />
+                    </svg>
+                  )}
+                  <span className="site-header__nickname">{user.nickname}</span>
+                </button>
+              </>
             ) : (
               <Link className="site-header__login" to="/login">
                 로그인
@@ -67,11 +79,16 @@ function Header({ query, onQueryChange, user }: HeaderProps) {
             )}
           </div>
         </header>
-        <div className="site-header__search-band">
-          <SearchBar query={query} onQueryChange={onQueryChange} />
-        </div>
+        {showSearch && (
+          <div className="site-header__search-band">
+            <SearchBar query={query} onQueryChange={onQueryChange} />
+          </div>
+        )}
       </div>
-      <div className="site-header-spacer" aria-hidden="true" />
+      <div
+        className={`site-header-spacer ${showSearch ? '' : 'no-search'}`}
+        aria-hidden="true"
+      />
     </>
   )
 }

@@ -62,13 +62,13 @@ pub async fn update(
     ))
 }
 
-/// DELETE /api/posts/{id} — 작성자만
+/// DELETE /api/posts/{id} — 작성자 또는 관리자
 pub async fn delete(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(post_id): Path<i64>,
 ) -> Result<StatusCode, AppError> {
-    services::posts::delete_post(&state.pool, post_id, user.id, &state.config.upload_dir).await?;
+    services::posts::delete_post(&state.pool, post_id, &user, &state.config.upload_dir).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
