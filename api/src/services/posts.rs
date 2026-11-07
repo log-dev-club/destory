@@ -26,6 +26,9 @@ const TAG_MAX_COUNT: usize = 10;
 static IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"!\[[^\]]*\]\([^)]*\)").unwrap());
 // 링크: `[텍스트](url)` → "텍스트" 만 남김
 static LINK_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\[([^\]]*)\]\([^)]*\)").unwrap());
+// 자동 링크: `<https://...>` → URL 만 남김 (에디터가 URL 을 이 형태로 저장함)
+static AUTOLINK_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"<((?:https?|mailto):[^<>\s]+)>").unwrap());
 // 인라인 수식: `$latex$` 통째로 제거
 // 팀원 참고: regex crate 는 선형 시간 보장을 위해 lookaround 를 지원하지 않아
 // "$100 그리고 $50" 같은 통화 표기 두 개가 한 줄에 있으면 오탐할 수 있음 (요약용이라 허용)
@@ -236,11 +239,14 @@ fn generate_summary(content: &str) -> String {
 
         let without_images = IMAGE_RE.replace_all(trimmed, "");
         let without_links = LINK_RE.replace_all(&without_images, "$1");
-        let without_math = INLINE_MATH_RE.replace_all(&without_links, "");
+        let without_autolinks = AUTOLINK_RE.replace_all(&without_links, "$1");
+        let without_math = INLINE_MATH_RE.replace_all(&without_autolinks, "");
         let cleaned: String = without_math
             .chars()
             .filter(|c| !matches!(c, '#' | '*' | '`' | '>' | '_' | '~' | '[' | ']'))
             .collect();
+        // 기호 제거 뒤에 엔티티를 풀어야 `-&gt;` 같은 본문 속 화살표가 지워지지 않고 `->` 로 남는다
+        let cleaned = decode_html_entities(&cleaned);
         let cleaned = cleaned.trim();
         if cleaned.is_empty() {
             continue;
@@ -252,6 +258,18 @@ fn generate_summary(content: &str) -> String {
         }
     }
     truncate_chars(&words.join(" "), 150)
+}
+
+/// 에디터가 Markdown 직렬화 시 이스케이프한 HTML 엔티티를 원래 문자로 되돌린다.
+/// 요약은 프론트에서 텍스트로 출력(React 가 이스케이프)하므로 디코딩해도 XSS 위험이 없다.
+fn decode_html_entities(text: &str) -> String {
+    text.replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ")
+        // &amp; 는 마지막에 풀어야 `&amp;gt;` 가 `>` 로 이중 디코딩되지 않는다
+        .replace("&amp;", "&")
 }
 
 /// 게시물의 태그를 통째로 교체
@@ -322,10 +340,12 @@ pub async fn update_post(
 
     let title = req.title.as_deref().map(validate_title).transpose()?;
     let content = req.content.as_deref().map(validate_content).transpose()?;
-    let summary = req
-        .excerpt
-        .map(|e| truncate_chars(e.trim(), SUMMARY_MAX))
-        .filter(|e| !e.is_empty());
+    // excerpt 를 따로 주지 않고 본문만 바꾼 경우에도 요약을 새 본문 기준으로 다시 만든다
+    let summary = match (req.excerpt, content.as_deref()) {
+        (Some(e), _) if !e.trim().is_empty() => Some(truncate_chars(e.trim(), SUMMARY_MAX)),
+        (_, Some(c)) => Some(resolve_summary(None, c)),
+        _ => None,
+    };
     let tags = req.tags.map(normalize_tags).transpose()?;
 
     let mut tx = pool.begin().await?;
@@ -405,4 +425,18 @@ pub async fn unstar(pool: &PgPool, post_id: i64, user_id: i64) -> Result<StarRes
         starred: false,
         star_count: star_count(pool, post_id).await?,
     })
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::generate_summary;
+
+    #[test]
+    fn 자동링크와_엔티티를_정리한다() {
+        let content = "<https://it-network.kr> -&gt; <https://loghub.kimyangmin.me>\n\n도메인에 돈 쓰기 싫어서 바꿉니다.";
+        assert_eq!(
+            generate_summary(content),
+            "https://it-network.kr -> https://loghub.kimyangmin.me 도메인에 돈 쓰기 싫어서 바꿉니다."
+        );
+    }
 }
